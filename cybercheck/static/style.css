@@ -1,0 +1,24 @@
+/* Base */
+:root {
+  --bg-pre: #0f172a;
+  --fg-pre: #e6eef8;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* Preformatted results */
+.result-pre {
+  background: var(--bg-pre);
+  color: var(--fg-pre);
+  padding: 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Make forms breathe a bit */
+.card .form-label { font-weight: 600; }
+
+.table td, .table th { vertical-align: middle; }

@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<h2 class="h4 mb-3">{{ title }}</h2>
+
+{# -------------------- Bandit parsed view -------------------- #}
+{% if parsed_bandit %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Bandit summary</div>
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge text-bg-danger">High: {{ parsed_bandit.summary.severity_counts.HIGH }}</span>
+        <span class="badge text-bg-warning">Medium: {{ parsed_bandit.summary.severity_counts.MEDIUM }}</span>
+        <span class="badge text-bg-info text-dark">Low: {{ parsed_bandit.summary.severity_counts.LOW }}</span>
+        <span class="badge text-bg-secondary">Undefined: {{ parsed_bandit.summary.severity_counts.UNDEFINED }}</span>
+      </div>
+      {% if parsed_bandit.summary.errors and parsed_bandit.summary.errors|length > 0 %}
+        <div class="alert alert-secondary mt-3 mb-0" role="alert">
+          <div class="fw-semibold mb-1">Bandit reported errors (non-fatal):</div>
+          <ul class="mb-0">
+            {% for e in parsed_bandit.summary.errors %}
+              <li class="small">{{ e }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if parsed_bandit.findings and parsed_bandit.findings|length > 0 %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Findings ({{ parsed_bandit.findings|length }})</div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Severity</th>
+                <th>File:Line</th>
+                <th>Rule</th>
+                <th>Description</th>
+                <th class="text-end">More</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in parsed_bandit.findings %}
+                <tr>
+                  <td>
+                    {% set sev = (f.severity or 'UNDEFINED')|upper %}
+                    {% if sev == 'HIGH' %}
+                      <span class="badge text-bg-danger">{{ sev }}</span>
+                    {% elif sev == 'MEDIUM' %}
+                      <span class="badge text-bg-warning">{{ sev }}</span>
+                    {% elif sev == 'LOW' %}
+                      <span class="badge text-bg-info text-dark">{{ sev }}</span>
+                    {% else %}
+                      <span class="badge text-bg-secondary">{{ sev }}</span>
+                    {% endif %}
+                    <div class="small text-muted">Conf: {{ f.confidence }}</div>
+                  </td>
+                  <td class="text-truncate" style="max-width: 280px;">
+                    {{ f.file }}:{{ f.line }}
+                  </td>
+                  <td>
+                    <div class="small fw-semibold">{{ f.test_id }}</div>
+                    <div class="small text-muted">{{ f.test_name }}</div>
+                    {% if f.cwe %}
+                      <div class="small text-muted">CWE-{{ f.cwe }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="small">
+                    {{ f.msg }}
+                    {% if f.code_snippet %}
+                      <details class="mt-1">
+                        <summary class="small">Show code</summary>
+                        <pre class="result-pre">{{ f.code_snippet }}</pre>
+                      </details>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% if f.more_info %}
+                      <a href="{{ f.more_info }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Docs</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-success">No Bandit findings 🎉</div>
+  {% endif %}
+{% endif %}
+
+{# -------------------- Nmap parsed view -------------------- #}
+{% if parsed_nmap %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Nmap summary</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Scanned at</div>
+          <div class="small text-muted">{{ parsed_nmap.summary.scanned_at or "unknown" }}</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Hosts</div>
+          <div class="small text-muted">{{ parsed_nmap.summary.hosts_up }} of {{ parsed_nmap.summary.hosts_total }} up</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Top open ports</div>
+          <div class="small text-muted">
+            {% for p in parsed_nmap.summary.top_ports %}
+              <span class="badge text-bg-secondary">{{ p.port }} ({{ p.count }})</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if parsed_nmap.hosts and parsed_nmap.hosts|length > 0 %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">Hosts ({{ parsed_nmap.hosts|length }})</div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Address</th>
+                <th>Hostnames</th>
+                <th>State</th>
+                <th>Open ports</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in parsed_nmap.hosts %}
+                <tr>
+                  <td>
+                    {% for a in h.addresses %}
+                      <div class="small">{{ a.addr }} <span class="text-muted">({{ a.addrtype }})</span></div>
+                    {% endfor %}
+                  </td>
+                  <td class="small">
+                    {% if h.hostnames %}
+                      {{ h.hostnames | join(', ') }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if h.status == 'up' %}
+                      <span class="badge text-bg-success">up</span>
+                    {% else %}
+                      <span class="badge text-bg-secondary">{{ h.status or 'unknown' }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="small">
+                    {% set open_ports = h.ports | selectattr("state", "equalto", "open") | list %}
+                    {% if open_ports %}
+                      {% for p in open_ports %}
+                        <div>{{ p.proto }}/{{ p.port }} — {{ p.service or 'unknown' }} {% if p.product %}({{ p.product }} {{ p.version }}){% endif %}</div>
+                      {% endfor %}
+                    {% else %}
+                      <span class="text-muted">none</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Raw Nmap XML</div>
+    <div class="card-body">
+      <pre class="result-pre mb-0">{{ parsed_nmap.raw_xml }}</pre>
+    </div>
+  </div>
+{% endif %}
+
+{# -------------------- Generic raw result fallback -------------------- #}
+<div class="card shadow-sm">
+  <div class="card-header fw-semibold">Raw result</div>
+  <div class="card-body">
+    <pre class="result-pre mb-0">{{ result | tojson(indent=2) }}</pre>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a class="btn btn-secondary" href="/">Back</a>
+</div>
+{% endblock %}

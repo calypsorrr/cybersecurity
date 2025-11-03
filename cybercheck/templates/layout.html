@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CyberCheck</title>
+
+  <!-- Your CSS first -->
+  <link href="/static/style.css" rel="stylesheet">
+
+  <!-- Bootstrap (CDN is fine for this app) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Choices.js styles (for the dropdown) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+
+  <style>
+    /* Ensure the custom dropdown overlays properly and fills width */
+    .choices { width: 100%; }
+    .choices__list--dropdown { z-index: 1055; } /* above cards/nav */
+    body { padding-bottom: 120px; } /* a bit more space at bottom */
+    .result-pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">CyberCheck</a>
+    <span class="badge text-bg-secondary ms-auto">Authorized use only</span>
+  </div>
+</nav>
+
+<div class="container py-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="alert alert-{{category}}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block body %}{% endblock %}
+</div>
+
+<!-- Bootstrap bundle (Popper included) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Choices.js -->
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script>
+  // Loading overlay (kept minimal). IMPORTANT: only disable buttons so inputs still submit.
+  (function () {
+    const overlayHtml = `
+      <div id="loadingOverlay" style="
+        position:fixed;inset:0;background:rgba(255,255,255,.7);
+        display:none;align-items:center;justify-content:center;z-index:2000">
+        <div class="text-center">
+          <div class="spinner-border" role="status" aria-hidden="true"></div>
+          <div class="mt-2 text-muted">Running scan…<br><small>This may take a few seconds.</small></div>
+        </div>
+      </div>`;
+    document.addEventListener('DOMContentLoaded', function () {
+      document.body.insertAdjacentHTML('beforeend', overlayHtml);
+      const overlay = document.getElementById('loadingOverlay');
+
+      function disableButtons() { document.querySelectorAll('form button').forEach(b => b.disabled = true); }
+      function enableButtons() { document.querySelectorAll('form button').forEach(b => b.disabled = false); }
+
+      document.querySelectorAll('form').forEach(f => {
+        f.addEventListener('submit', () => { overlay.style.display = 'flex'; disableButtons(); });
+      });
+
+      window.addEventListener('pageshow', () => { overlay.style.display = 'none'; enableButtons(); });
+    });
+  })();
+</script>
+
+<!-- Choices.js init hook: index.html will call window.initChoices() after DOM is ready -->
+<script>
+  window.initChoices = function(selector, opts) {
+    const el = document.querySelector(selector);
+    if (!el) return null;
+    return new Choices(el, Object.assign({
+      searchEnabled: true,
+      shouldSort: false,
+      itemSelectText: '',
+      position: 'bottom' // force dropdown to open below
+    }, opts || {}));
+  };
+</script>
+</body>
+</html>

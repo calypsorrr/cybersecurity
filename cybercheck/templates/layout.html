@@ -138,6 +138,55 @@
   };
 </script>
 
+<!-- Sticky header animation + responsive CSS variable sync -->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const nav = document.querySelector('.navbar.sticky-top');
+    if (!nav) return;
+
+    const root = document.documentElement;
+    const updateHeaderHeight = () => {
+      root.style.setProperty('--header-h', `${nav.offsetHeight}px`);
+    };
+
+    updateHeaderHeight();
+
+    let lastY = window.pageYOffset;
+    let ticking = false;
+    const threshold = 8;
+
+    const handleScroll = () => {
+      const currentY = window.pageYOffset;
+
+      if (currentY > nav.offsetHeight) {
+        nav.classList.add('is-scrolled');
+      } else {
+        nav.classList.remove('is-scrolled');
+      }
+
+      if (currentY > lastY + threshold && currentY > nav.offsetHeight) {
+        nav.classList.add('is-hidden');
+      } else if (currentY < lastY - threshold || currentY <= nav.offsetHeight) {
+        nav.classList.remove('is-hidden');
+      }
+
+      lastY = currentY;
+      ticking = false;
+    };
+
+    handleScroll();
+    window.addEventListener('resize', updateHeaderHeight);
+    window.addEventListener('load', updateHeaderHeight, { once: true });
+
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(handleScroll);
+        ticking = true;
+      }
+    }, { passive: true });
+  });
+</script>
+
 <!-- Mobile sidebar toggle -->
 <script>
   document.addEventListener('DOMContentLoaded', function () {

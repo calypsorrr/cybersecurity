@@ -306,8 +306,32 @@ body.sidebar-open .sidebar-backdrop { opacity: 1; visibility: visible; }
 .card .form-label { font-weight: 600; }
 .table td, .table th { vertical-align: middle; }
 
+
+/* Sticky header refinement: smooth hide/show while maintaining stacking context */
 .navbar.sticky-top {
   z-index: 2000;  /* higher than .app-sidebar (1045) and the dropdowns (1055) */
+  position: sticky;
+  top: 0;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+  will-change: transform;
+  background-color: rgba(15, 23, 42, 0.92);
+  backdrop-filter: saturate(180%) blur(18px);
+}
+
+.navbar.sticky-top.is-scrolled {
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
+}
+
+.navbar.sticky-top.is-hidden {
+  transform: translateY(-100%);
+  box-shadow: none;
+}
+
+@media (max-width: 575.98px) {
+  .navbar.sticky-top {
+    background-color: rgba(15, 23, 42, 0.98);
+    backdrop-filter: saturate(160%) blur(12px);
+  }
 }
 
 /* keep sidebar above its backdrop but below the header */

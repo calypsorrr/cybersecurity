@@ -9,7 +9,7 @@ DATABASE: str = os.environ.get("DATABASE", "logs/cybercheck.db")
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # CLI tools allowed
-ALLOWED_TOOLS = ["nmap", "nikto", "bandit", "pip-audit", "safety"]
+ALLOWED_TOOLS = ["nmap", "nikto", "bandit", "pip-audit", "safety", "scapy"]
 
 # Timeout defaults (seconds)
 DEFAULT_TIMEOUT = 300

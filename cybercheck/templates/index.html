@@ -27,7 +27,7 @@
     <div class="metric-card">
       <span class="metric-label">Active tooling</span>
       <span class="metric-value">{{ metrics.active_runs }}</span>
-      <span class="metric-subtext">Nmap, Scapy or Nikto runs in the recent history</span>
+      <span class="metric-subtext">Nmap, Scapy or Nikto in recent history</span>
     </div>
   </div>
   <div class="col-12 col-md-4">
@@ -63,7 +63,7 @@
           <hr class="text-muted">
 
           <div>
-            <label class="form-label">Tool</label>
+            <label class="form-label" for="activeTool">Tool</label>
             <select name="tool" id="activeTool" class="form-select" required>
               <option value="nmap">nmap (port + service discovery)</option>
               <option value="nikto">nikto (HTTP vulns)</option>
@@ -73,20 +73,20 @@
 
           <div class="row g-3">
             <div class="col-12 col-lg-8">
-              <label class="form-label">Target</label>
-              <input class="form-control" name="target" placeholder="target host or URL" autocomplete="off" required>
+              <label class="form-label" for="activeTarget">Target</label>
+              <input id="activeTarget" class="form-control" name="target" placeholder="target host or URL" autocomplete="off" required>
             </div>
             <div class="col-12 col-lg-4">
-              <label class="form-label">Operator</label>
-              <input class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
+              <label class="form-label" for="activeUser">Operator</label>
+              <input id="activeUser" class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
             </div>
           </div>
 
           <!-- nmap-only options -->
           <div id="nmapOptions" class="vstack gap-3 d-none">
             <div>
-              <label class="form-label">Nmap profile</label>
-              <select name="nmap_profile" class="form-select">
+              <label class="form-label" for="nmapProfile">Nmap profile</label>
+              <select id="nmapProfile" name="nmap_profile" class="form-select">
                 <option value="">(default)</option>
                 {% for p in nmap_profiles %}
                   <option value="{{ p }}">{{ p }}</option>
@@ -96,8 +96,8 @@
             </div>
 
             <div>
-              <label class="form-label">Extra args (optional)</label>
-              <input class="form-control" name="extra_args" placeholder="Additional nmap args, space-separated">
+              <label class="form-label" for="nmapExtra">Extra args (optional)</label>
+              <input id="nmapExtra" class="form-control" name="extra_args" placeholder="Additional nmap args, space-separated">
             </div>
           </div>
 
@@ -105,20 +105,30 @@
           <div id="scapyOptions" class="vstack gap-3 d-none">
             <div class="row g-3">
               <div class="col-12 col-md-6">
-                <label class="form-label">ICMP probes</label>
-                <input class="form-control" name="scapy_count" placeholder="Number of probes (default 4)" inputmode="numeric" pattern="\d*">
+                <label class="form-label" for="scapyCount">ICMP probes</label>
+                <input id="scapyCount" class="form-control" name="scapy_count" placeholder="Number of probes (default 4)" inputmode="numeric" pattern="\d*">
                 <div class="form-text">Sends ICMP echo requests to the target host.</div>
               </div>
               <div class="col-12 col-md-6">
-                <label class="form-label">Timeout (seconds)</label>
-                <input class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
+                <label class="form-label" for="scapyTimeout">Timeout (seconds)</label>
+                <input id="scapyTimeout" class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="scapyInterval">Interval (seconds)</label>
+                <input id="scapyInterval" class="form-control" name="scapy_interval" placeholder="Delay between probes (default 1.0)" inputmode="decimal">
+                <div class="form-text">Set to 0 for back-to-back packets.</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="scapyPayloadSize">Payload size (bytes)</label>
+                <input id="scapyPayloadSize" class="form-control" name="scapy_payload_size" placeholder="Generated payload length (default 32)" inputmode="numeric" pattern="\d*">
+                <div class="form-text">Used when no custom payload is provided.</div>
               </div>
             </div>
           </div>
 
           <div>
-            <label class="form-label">Engagement token</label>
-            <input class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN (required)" autocomplete="off" required>
+            <label class="form-label" for="engToken">Engagement token</label>
+            <input id="engToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN (required)" autocomplete="off" required>
             <div class="form-text">Set <code>ENGAGEMENT_TOKEN</code> in your environment and paste it here for each run.</div>
           </div>
 
@@ -142,15 +152,15 @@
       <div class="card-body">
         <form method="post" action="/run_non_intrusive" class="vstack gap-3" novalidate>
           <div>
-            <label class="form-label">Tool</label>
-            <select name="tool" class="form-select" required>
+            <label class="form-label" for="niTool">Tool</label>
+            <select id="niTool" name="tool" class="form-select" required>
               <option value="bandit">Bandit (static Python)</option>
               <option value="pip-audit">pip-audit (dependencies)</option>
             </select>
           </div>
 
           <div>
-            <label class="form-label">Target</label>
+            <label class="form-label" for="banditTarget">Target</label>
             <select name="target" id="banditTarget" class="form-select">
               <option value="" selected disabled>(choose from project …)</option>
               {% for p in scan_presets %}
@@ -158,33 +168,29 @@
               {% endfor %}
               <option value="__custom__">Custom path… (type below)</option>
             </select>
-            <div class="form-text">
-              Pick a path from the list or choose <strong>Custom path…</strong> and type it below.
-            </div>
+            <div class="form-text">Pick a path from the list or choose <strong>Custom path…</strong> and type it below.</div>
           </div>
 
           <div id="customPathWrap" class="d-none">
-            <label class="form-label">Custom path</label>
-            <input class="form-control" name="target_custom" placeholder="./ or absolute path" autocomplete="off">
+            <label class="form-label" for="customPath">Custom path</label>
+            <input id="customPath" class="form-control" name="target_custom" placeholder="./ or absolute path" autocomplete="off">
           </div>
 
           <div>
-            <label class="form-label">Exclude paths (Bandit)</label>
-            <input class="form-control" name="bandit_exclude"
-                   placeholder="comma-separated, e.g. cybercheck/app.py,cybercheck/config.py">
+            <label class="form-label" for="banditExclude">Exclude paths (Bandit)</label>
+            <input id="banditExclude" class="form-control" name="bandit_exclude" placeholder="comma-separated, e.g. cybercheck/app.py,cybercheck/config.py">
             <div class="form-text">Maps to <code>bandit -x</code>. Relative paths resolved from the app folder.</div>
           </div>
 
           <div>
-            <label class="form-label">Skip rules (Bandit)</label>
-            <input class="form-control" name="bandit_skip"
-                   placeholder="comma-separated rule IDs, e.g. B404,B603">
+            <label class="form-label" for="banditSkip">Skip rules (Bandit)</label>
+            <input id="banditSkip" class="form-control" name="bandit_skip" placeholder="comma-separated rule IDs, e.g. B404,B603">
             <div class="form-text">Maps to <code>bandit -s</code>. Only for Bandit runs.</div>
           </div>
 
           <div>
-            <label class="form-label">Operator</label>
-            <input class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
+            <label class="form-label" for="niUser">Operator</label>
+            <input id="niUser" class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
           </div>
 
           <div class="d-flex flex-wrap gap-2">

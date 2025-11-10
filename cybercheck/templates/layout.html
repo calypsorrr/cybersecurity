@@ -4,25 +4,24 @@
   <meta charset="utf-8">
   <title>CyberCheck</title>
 
-  <!-- Your CSS first -->
-  <link href="/static/style.css" rel="stylesheet">
-
-  <!-- Bootstrap (CDN is fine for this app) -->
+  <!-- Vendor CSS FIRST -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Choices.js styles (for the dropdown) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
 
+  <!-- Your app CSS LAST (overrides vendors) -->
+  <link href="/static/style.css" rel="stylesheet">
+
   <style>
-    /* Ensure the custom dropdown overlays properly and fills width */
+    /* Small inline helpers that are page-agnostic */
     .choices { width: 100%; }
     .choices__list--dropdown { z-index: 1055; } /* above cards/nav */
-    body { padding-bottom: 120px; } /* a bit more space at bottom */
     .result-pre { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
-<body class="app-body bg-body-tertiary">
-<nav class="navbar navbar-dark bg-dark shadow-sm">
+<body class="bg-body-tertiary {{ active_page|default('') }}">
+
+<!-- Sticky header (follows on scroll; no fixed height inline) -->
+<nav class="navbar navbar-dark bg-dark shadow-sm sticky-top">
   <div class="container-fluid py-2">
     <a class="navbar-brand fw-semibold" href="/">CyberCheck</a>
     <div class="d-flex align-items-center gap-3 ms-auto">
@@ -34,67 +33,71 @@
   </div>
 </nav>
 
-<div class="app-shell d-flex">
-  <aside class="app-sidebar">
-    <div class="sidebar-inner">
-      <div>
-        <div class="sidebar-title text-uppercase small">Navigation</div>
-        <nav class="nav flex-column mt-3">
-          <a class="nav-link {{ 'active' if (active_page|default('')) == 'home' else '' }}" href="{{ url_for('index') }}">
-            <span class="sidebar-icon" aria-hidden="true">⚡</span>
-            <span>
-              <strong>Quick scans</strong>
-              <small class="d-block text-muted">Run Nmap, Scapy & safe checks</small>
-            </span>
-          </a>
-          <a class="nav-link {{ 'active' if (active_page|default('')) == 'monitor' else '' }}" href="{{ url_for('monitor') }}">
-            <span class="sidebar-icon" aria-hidden="true">🛰️</span>
-            <span>
-              <strong>Live monitor</strong>
-              <small class="d-block text-muted">Packet telemetry & alerts</small>
-            </span>
-          </a>
-          <a class="nav-link {{ 'active' if (active_page|default('')) == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
-            <span class="sidebar-icon" aria-hidden="true">📊</span>
-            <span>
-              <strong>Operations dashboard</strong>
-              <small class="d-block text-muted">Live telemetry & run history</small>
-            </span>
-          </a>
-        </nav>
+<!-- App shell uses flex column to remove bottom white space -->
+<div class="app-shell">
+  <!-- Sidebar + main arranged in a row that fills remaining height -->
+  <div class="app-body">
+    <aside class="app-sidebar">
+      <div class="sidebar-inner">
+        <div>
+          <div class="sidebar-title text-uppercase small">Navigation</div>
+          <nav class="nav flex-column mt-3">
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'home' else '' }}" href="{{ url_for('index') }}">
+              <span class="sidebar-icon" aria-hidden="true">⚡</span>
+              <span>
+                <strong>Quick scans</strong>
+                <small class="d-block text-muted">Run Nmap, Scapy & safe checks</small>
+              </span>
+            </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'monitor' else '' }}" href="{{ url_for('monitor') }}">
+              <span class="sidebar-icon" aria-hidden="true">🛰️</span>
+              <span>
+                <strong>Live monitor</strong>
+                <small class="d-block text-muted">Packet telemetry & alerts</small>
+              </span>
+            </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
+              <span class="sidebar-icon" aria-hidden="true">📊</span>
+              <span>
+                <strong>Operations dashboard</strong>
+                <small class="d-block text-muted">Live telemetry & run history</small>
+              </span>
+            </a>
+          </nav>
+        </div>
       </div>
-      <div class="sidebar-footer small text-muted">
-        Stay within authorized scope. All tool executions are timestamped and stored locally.
-      </div>
-    </div>
-  </aside>
+    </aside>
 
-  <main class="app-main flex-grow-1">
-    <div class="app-main-inner container-fluid py-4">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="alert-stack">
-            {% for category, msg in messages %}
-              <div class="alert alert-{{category}} shadow-sm">{{ msg }}</div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-      {% block body %}{% endblock %}
-    </div>
-  </main>
+    <main class="app-main">
+      <div class="app-main-inner container-fluid py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="alert-stack">
+              {% for category, msg in messages %}
+                <div class="alert alert-{{category}} shadow-sm">{{ msg }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        {% block body %}{% endblock %}
+      </div>
+
+      <!-- Optional footer fills the space where the white gap was -->
+      <footer class="app-footer">
+        © CyberCheck · Authorized use only
+      </footer>
+    </main>
+  </div>
 </div>
 
 <div class="sidebar-backdrop d-lg-none"></div>
 
-<!-- Bootstrap bundle (Popper included) -->
+<!-- Vendor JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Choices.js -->
 <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 
 <script>
-  // Loading overlay (kept minimal). IMPORTANT: only disable buttons so inputs still submit.
+  // Loading overlay (kept minimal). IMPORTANT: only disable form buttons.
   (function () {
     const overlayHtml = `
       <div id="loadingOverlay" style="
@@ -121,7 +124,7 @@
   })();
 </script>
 
-<!-- Choices.js init hook: index.html will call window.initChoices() after DOM is ready -->
+<!-- Choices.js init hook -->
 <script>
   window.initChoices = function(selector, opts) {
     const el = document.querySelector(selector);
@@ -130,36 +133,23 @@
       searchEnabled: true,
       shouldSort: false,
       itemSelectText: '',
-      position: 'bottom' // force dropdown to open below
+      position: 'bottom'
     }, opts || {}));
   };
 </script>
 
+<!-- Mobile sidebar toggle -->
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const toggle = document.getElementById('sidebarToggle');
     const backdrop = document.querySelector('.sidebar-backdrop');
     const links = document.querySelectorAll('.app-sidebar .nav-link');
-
     const closeSidebar = () => document.body.classList.remove('sidebar-open');
 
-    if (toggle) {
-      toggle.addEventListener('click', () => {
-        document.body.classList.toggle('sidebar-open');
-      });
-    }
-
-    if (backdrop) {
-      backdrop.addEventListener('click', closeSidebar);
-    }
-
+    if (toggle) toggle.addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
     links.forEach(link => link.addEventListener('click', closeSidebar));
-
-    document.addEventListener('keydown', (evt) => {
-      if (evt.key === 'Escape') {
-        closeSidebar();
-      }
-    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
   });
 </script>
 </body>

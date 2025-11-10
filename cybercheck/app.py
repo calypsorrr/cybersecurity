@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 
 from cybercheck.config import SECRET_KEY, NMAP_PROFILES
 from cybercheck.utils.auth import require_active_session
-from cybercheck.scanners import nmap_scan, nikto_scan
+from cybercheck.scanners import nmap_scan, nikto_scan, scapy_ping_scan
 from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
@@ -162,8 +162,11 @@ def run_active():
     tool = (request.form.get("tool") or "").strip()
     target = (request.form.get("target") or "").strip()
     user = (request.form.get("user") or "operator").strip() or "operator"
-    profile = (request.form.get("nmap_profile") or "").strip() or None
-    extra_args_raw = (request.form.get("extra_args") or "").strip()
+    profile = None
+    extra_args_raw = ""
+    if tool == "nmap":
+        profile = (request.form.get("nmap_profile") or "").strip() or None
+        extra_args_raw = (request.form.get("extra_args") or "").strip()
 
     if not target:
         flash("Target required for active scans.", "danger")
@@ -200,6 +203,43 @@ def run_active():
     if tool == "nikto":
         res = nikto_scan(user=user, target_url=target)
         return render_template("results.html", result=res, title=f"Nikto: {target}")
+
+    if tool == "scapy":
+        try:
+            scapy_count = int((request.form.get("scapy_count") or "").strip() or 4)
+            scapy_timeout = float((request.form.get("scapy_timeout") or "").strip() or 2.0)
+        except ValueError:
+            flash("Invalid Scapy options provided.", "danger")
+            return redirect(url_for("index"))
+
+        if scapy_count <= 0 or scapy_timeout <= 0:
+            flash("Scapy count and timeout must be positive values.", "danger")
+            return redirect(url_for("index"))
+
+        res = scapy_ping_scan(
+            user=user,
+            target=target,
+            count=scapy_count,
+            timeout=scapy_timeout,
+        )
+
+        report = res.get("report") or {}
+        summary = report.get("summary") or {}
+
+        if res.get("stderr"):
+            flash("Scapy encountered an error. See details below.", "danger")
+        elif summary.get("status") == "up":
+            recv = summary.get("received", 0)
+            flash(f"Scapy: host responded to {recv} ICMP probe(s).", "success")
+        else:
+            flash("Scapy completed: no responses received.", "info")
+
+        return render_template(
+            "results.html",
+            result=res,
+            parsed_scapy=report,
+            title=f"Scapy ICMP: {target}",
+        )
 
     flash("Unknown active tool.", "danger")
     return redirect(url_for("index"))

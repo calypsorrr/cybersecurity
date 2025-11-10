@@ -1,0 +1,321 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="page-header">
+  <div>
+    <h1 class="h2 mb-2">Live network monitor</h1>
+    <p class="page-subtitle mb-0">Inspect packet activity on the selected network interface, review protocol mix and receive alerts when suspicious surges are detected. Keep this view open while you exercise the network to watch flows appear in real time.</p>
+  </div>
+  <div class="text-end small text-muted" id="monitorStatus"></div>
+</div>
+
+<div class="row g-4" id="monitorMetrics">
+  <div class="col-xl-3 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Total packets</span>
+      <span class="metric-value" data-field="totals.packets">—</span>
+      <span class="metric-subtext">Captured since monitor start</span>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Throughput</span>
+      <span class="metric-value" data-field="window.rate">—</span>
+      <span class="metric-subtext">Packets per second ({{ window_seconds }}s window)</span>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Data observed</span>
+      <span class="metric-value" data-field="totals.bytes">—</span>
+      <span class="metric-subtext">Approximate bytes captured</span>
+    </div>
+  </div>
+  <div class="col-xl-3 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Uptime</span>
+      <span class="metric-value" data-field="uptime">—</span>
+      <span class="metric-subtext">Monitor runtime</span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <h2 class="h5 mb-0">Protocol mix</h2>
+      </div>
+      <div class="card-body">
+        <div class="protocol-list" id="protocolList"></div>
+        <p class="text-muted small mb-0">Totals update every few seconds to reflect the live capture.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <h2 class="h5 mb-0">Top talkers</h2>
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-12">
+            <h3 class="h6 text-uppercase text-muted fw-semibold">Sources</h3>
+            <ul class="monitor-list" id="topSources"></ul>
+          </div>
+          <div class="col-12">
+            <h3 class="h6 text-uppercase text-muted fw-semibold">Destinations</h3>
+            <ul class="monitor-list" id="topDestinations"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-xl-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3 d-flex justify-content-between align-items-center">
+        <h2 class="h5 mb-0">Alert stream</h2>
+        <span class="badge rounded-pill text-bg-secondary" id="alertCount">0 alerts</span>
+      </div>
+      <div class="card-body">
+        <div class="alert-feed" id="alertFeed"></div>
+        <p class="text-muted small mb-0">Burst detections help spot abnormal conditions like DDoS style floods generated with Scapy.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3 d-flex justify-content-between align-items-center">
+        <h2 class="h5 mb-0">Recent packets</h2>
+        <span class="badge rounded-pill text-bg-secondary" id="recentCount">0 shown</span>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle monitor-table">
+            <thead>
+              <tr>
+                <th scope="col">Time (UTC)</th>
+                <th scope="col">Src → Dst</th>
+                <th scope="col">Proto</th>
+                <th scope="col" class="text-end">Bytes</th>
+              </tr>
+            </thead>
+            <tbody id="recentPackets"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="alertTemplate">
+  <div class="alert monitor-alert" role="alert">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <strong class="alert-badge me-2"></strong>
+        <span class="alert-message"></span>
+      </div>
+      <span class="alert-time small text-muted"></span>
+    </div>
+  </div>
+</template>
+
+<script>
+  (() => {
+    const statusEl = document.getElementById('monitorStatus');
+    const protocolList = document.getElementById('protocolList');
+    const topSources = document.getElementById('topSources');
+    const topDestinations = document.getElementById('topDestinations');
+    const alertFeed = document.getElementById('alertFeed');
+    const recentTable = document.getElementById('recentPackets');
+    const alertCount = document.getElementById('alertCount');
+    const recentCount = document.getElementById('recentCount');
+    const alertTemplate = document.getElementById('alertTemplate');
+
+    const metricFields = document.querySelectorAll('[data-field]');
+
+    function formatNumber(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return '—';
+      }
+      if (value >= 1_000_000) {
+        return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      }
+      if (value >= 1_000) {
+        return (value / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+      }
+      return String(Math.round(value));
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let idx = 0;
+      let value = bytes;
+      while (value >= 1024 && idx < units.length - 1) {
+        value /= 1024;
+        idx++;
+      }
+      return value.toFixed(value >= 10 || idx === 0 ? 0 : 1) + ' ' + units[idx];
+    }
+
+    function formatUptime(seconds) {
+      if (!seconds || seconds < 0) return '—';
+      const mins = Math.floor(seconds / 60);
+      const hrs = Math.floor(mins / 60);
+      const days = Math.floor(hrs / 24);
+      if (days) return `${days}d ${hrs % 24}h`;
+      if (hrs) return `${hrs}h ${mins % 60}m`;
+      if (mins) return `${mins}m ${(seconds % 60).toFixed(0)}s`;
+      return `${seconds.toFixed(0)}s`;
+    }
+
+    function setMetric(field, value) {
+      let display = value;
+      if (field === 'totals.bytes') {
+        display = formatBytes(value);
+      } else if (field === 'uptime') {
+        display = formatUptime(value);
+      } else if (field === 'window.rate') {
+        display = value ? value.toFixed(1) : '0.0';
+      } else {
+        display = formatNumber(value);
+      }
+      return display;
+    }
+
+    function renderList(container, entries) {
+      container.innerHTML = '';
+      if (!entries || !entries.length) {
+        const li = document.createElement('li');
+        li.className = 'text-muted small';
+        li.textContent = 'No data captured yet.';
+        container.appendChild(li);
+        return;
+      }
+      entries.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="fw-semibold">${item.key}</span><span class="badge text-bg-primary rounded-pill">${item.count}</span>`;
+        container.appendChild(li);
+      });
+    }
+
+    function renderProtocols(protocols) {
+      protocolList.innerHTML = '';
+      const entries = Object.entries(protocols || {});
+      if (!entries.length) {
+        protocolList.innerHTML = '<p class="text-muted small mb-0">Waiting for packets…</p>';
+        return;
+      }
+      entries.sort((a, b) => b[1] - a[1]);
+      entries.forEach(([proto, count]) => {
+        const pct = metricData.totals && metricData.totals.packets ? Math.round((count / metricData.totals.packets) * 100) : 0;
+        const row = document.createElement('div');
+        row.className = 'protocol-row';
+        row.innerHTML = `
+          <div class="protocol-label">${proto}</div>
+          <div class="protocol-meter">
+            <span class="protocol-meter-bar" style="width:${Math.min(pct, 100)}%"></span>
+          </div>
+          <div class="protocol-count">${formatNumber(count)}<small class="text-muted"> (${pct}%)</small></div>`;
+        protocolList.appendChild(row);
+      });
+    }
+
+    function renderAlerts(alerts) {
+      alertFeed.innerHTML = '';
+      if (!alerts || !alerts.length) {
+        alertFeed.innerHTML = '<p class="text-muted small mb-0">No alerts yet. Generate some traffic to populate this feed.</p>';
+        alertCount.textContent = '0 alerts';
+        return;
+      }
+      alertCount.textContent = `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`;
+      alerts.forEach(entry => {
+        const clone = alertTemplate.content.firstElementChild.cloneNode(true);
+        clone.classList.add(`alert-${entry.severity || 'warning'}`);
+        clone.querySelector('.alert-badge').textContent = entry.severity ? entry.severity.toUpperCase() : 'WARN';
+        clone.querySelector('.alert-message').textContent = entry.message;
+        clone.querySelector('.alert-time').textContent = new Date(entry.time).toLocaleTimeString('en-GB', { hour12: false });
+        alertFeed.appendChild(clone);
+      });
+    }
+
+    function renderRecent(packets) {
+      recentTable.innerHTML = '';
+      if (!packets || !packets.length) {
+        recentTable.innerHTML = '<tr><td colspan="4" class="text-muted small">No packets captured yet.</td></tr>';
+        recentCount.textContent = '0 shown';
+        return;
+      }
+      recentCount.textContent = `${packets.length} shown`;
+      packets.forEach(pkt => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${new Date(pkt.time).toLocaleTimeString('en-GB', { hour12: false })}</td>
+          <td><span class="fw-semibold">${pkt.src}</span><span class="text-muted"> → </span><span class="fw-semibold">${pkt.dst}</span></td>
+          <td><span class="badge text-bg-light text-dark">${pkt.protocol}</span></td>
+          <td class="text-end">${formatNumber(pkt.size)}</td>`;
+        recentTable.appendChild(tr);
+      });
+    }
+
+    const metricData = {};
+
+    function assignValue(path, value) {
+      const segments = path.split('.');
+      let target = metricData;
+      segments.slice(0, -1).forEach(segment => {
+        target = target[segment] = target[segment] || {};
+      });
+      const lastIndex = segments.length - 1;
+      target[segments[lastIndex]] = value;
+    }
+
+    function updateMetrics(snapshot) {
+      metricFields.forEach(fieldEl => {
+        const path = fieldEl.getAttribute('data-field');
+        const segments = path.split('.');
+        let value = snapshot;
+        for (const segment of segments) {
+          value = value ? value[segment] : undefined;
+        }
+        assignValue(path, value);
+        fieldEl.textContent = setMetric(path, value);
+      });
+    }
+
+    function refresh() {
+      fetch("{{ url_for('api_network_snapshot') }}")
+        .then(resp => resp.json())
+        .then(snapshot => {
+          if (snapshot.error) {
+            statusEl.innerHTML = `<span class="badge text-bg-danger">Monitor error</span> ${snapshot.error}`;
+          } else {
+            const meta = [];
+            if (snapshot.running) meta.push('<span class="badge text-bg-success">Sniffing</span>');
+            if (snapshot.interface) meta.push(`<span class="badge text-bg-dark">${snapshot.interface}</span>`);
+            if (snapshot.filter) meta.push(`<span class="badge text-bg-secondary">${snapshot.filter}</span>`);
+            statusEl.innerHTML = meta.join(' ');
+          }
+
+          updateMetrics(snapshot);
+          renderProtocols(snapshot.protocols);
+          renderList(topSources, snapshot.top_sources);
+          renderList(topDestinations, snapshot.top_destinations);
+          renderAlerts(snapshot.alert_log);
+          renderRecent(snapshot.recent_packets);
+        })
+        .catch(err => {
+          statusEl.innerHTML = `<span class="badge text-bg-danger">Error</span> ${err}`;
+        });
+    }
+
+    refresh();
+    setInterval(refresh, 3000);
+  })();
+</script>
+{% endblock %}
+

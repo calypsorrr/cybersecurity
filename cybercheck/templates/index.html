@@ -1,21 +1,143 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-  <h1 class="h3 mb-0">CyberCheck — Dashboard</h1>
-  <span class="badge text-bg-secondary">Authorized use only</span>
+<div class="page-header">
+  <div>
+    <h1 class="display-6">Quick engagement console</h1>
+    <p class="page-subtitle">Launch targeted Nmap, Scapy and compliance scans with an audit-friendly workflow. Pivot to the operations dashboard to review telemetry across your authorized scope.</p>
+  </div>
+  <div class="d-flex flex-column align-items-lg-end gap-2">
+    <div class="metric-card p-3">
+      <span class="metric-label">Last active scan</span>
+      <span class="metric-value" style="font-size:1.25rem;">{{ metrics.last_active_finished }}</span>
+      <span class="metric-subtext">Updated automatically from recent activity</span>
+    </div>
+  </div>
 </div>
-<p class="text-muted mb-4">Run non-intrusive checks locally or authorized active scans. All runs are logged.</p>
+
+<div class="row g-3 mb-4">
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">Runs logged</span>
+      <span class="metric-value">{{ metrics.total_runs }}</span>
+      <span class="metric-subtext">Stored in the local SQLite engagement log</span>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">Active tooling</span>
+      <span class="metric-value">{{ metrics.active_runs }}</span>
+      <span class="metric-subtext">Nmap, Scapy or Nikto runs in the recent history</span>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">API endpoint</span>
+      <span class="metric-value" style="font-size:1.4rem;">/api/runs</span>
+      <span class="metric-subtext">Pull structured JSON for downstream tooling</span>
+    </div>
+  </div>
+</div>
 
 <div class="row g-4">
-  <!-- Left column -->
-  <div class="col-12 col-lg-6">
+  <!-- Primary column -->
+  <div class="col-12 col-xxl-7">
 
-    <!-- Non-intrusive -->
+    <!-- Active -->
     <div class="card shadow-sm">
       <div class="card-header d-flex align-items-center justify-content-between">
-        <span class="fw-semibold">Non-intrusive checks</span>
-        <span class="badge text-bg-success">Safe</span>
+        <div>
+          <span class="fw-semibold d-block">Active reconnaissance</span>
+          <small class="text-muted">Nmap, Scapy and Nikto — requires engagement token</small>
+        </div>
+        <span class="badge text-bg-danger">Authorized targets only</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/run_active" class="vstack gap-3" novalidate>
+
+          <div class="alert alert-warning mb-0" role="alert">
+            <div class="fw-semibold">Always verify scope before running active scans.</div>
+            <div class="small mb-0">Use the dashboard shortcut on the left to confirm the environment you are targeting.</div>
+          </div>
+
+          <hr class="text-muted">
+
+          <div>
+            <label class="form-label">Tool</label>
+            <select name="tool" id="activeTool" class="form-select" required>
+              <option value="nmap">nmap (port + service discovery)</option>
+              <option value="nikto">nikto (HTTP vulns)</option>
+              <option value="scapy">scapy (ICMP ping)</option>
+            </select>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-8">
+              <label class="form-label">Target</label>
+              <input class="form-control" name="target" placeholder="target host or URL" autocomplete="off" required>
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label">Operator</label>
+              <input class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
+            </div>
+          </div>
+
+          <!-- nmap-only options -->
+          <div id="nmapOptions" class="vstack gap-3 d-none">
+            <div>
+              <label class="form-label">Nmap profile</label>
+              <select name="nmap_profile" class="form-select">
+                <option value="">(default)</option>
+                {% for p in nmap_profiles %}
+                  <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Preset scan patterns (e.g., <code>standard</code>, <code>top-ports</code>, <code>vuln-scan</code>).</div>
+            </div>
+
+            <div>
+              <label class="form-label">Extra args (optional)</label>
+              <input class="form-control" name="extra_args" placeholder="Additional nmap args, space-separated">
+            </div>
+          </div>
+
+          <!-- scapy-only options -->
+          <div id="scapyOptions" class="vstack gap-3 d-none">
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <label class="form-label">ICMP probes</label>
+                <input class="form-control" name="scapy_count" placeholder="Number of probes (default 4)" inputmode="numeric" pattern="\d*">
+                <div class="form-text">Sends ICMP echo requests to the target host.</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Timeout (seconds)</label>
+                <input class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">Engagement token</label>
+            <input class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN (required)" autocomplete="off" required>
+            <div class="form-text">Set <code>ENGAGEMENT_TOKEN</code> in your environment and paste it here for each run.</div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-danger">Run active scan</button>
+            <span class="text-muted small align-self-center">Results appear immediately and in the dashboard history.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Non-intrusive -->
+    <div class="card shadow-sm mt-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <div>
+          <span class="fw-semibold d-block">Local assurance checks</span>
+          <small class="text-muted">Safe to run against your own source tree</small>
+        </div>
+        <span class="badge text-bg-success">Non-intrusive</span>
       </div>
       <div class="card-body">
         <form method="post" action="/run_non_intrusive" class="vstack gap-3" novalidate>
@@ -65,118 +187,9 @@
             <input class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
           </div>
 
-          <div class="d-flex gap-2">
+          <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-primary">Run</button>
-            <span class="text-muted small align-self-center">Results appear below and in history.</span>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Active -->
-    <div class="card shadow-sm mt-4">
-      <div class="card-header d-flex align-items-center justify-content-between">
-        <span class="fw-semibold">Active checks</span>
-        <span class="badge text-bg-danger">Requires token</span>
-      </div>
-      <div class="card-body">
-        <form method="post" action="/run_active" class="vstack gap-3" novalidate>
-
-          <div>
-            <label class="form-label">Tool</label>
-            <select name="tool" id="activeTool" class="form-select" required>
-              <option value="nmap">nmap (port + service discovery)</option>
-              <option value="nikto">nikto (HTTP vulns)</option>
-              <option value="scapy">scapy (ICMP ping)</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="form-label">Target</label>
-            <input class="form-control" name="target" placeholder="target host or URL" autocomplete="off" required>
-          </div>
-
-          <!-- nmap-only options -->
-          <div id="nmapOptions" class="vstack gap-3 d-none">
-            <div>
-              <label class="form-label">Nmap profile</label>
-              <select name="nmap_profile" class="form-select">
-                <option value="">(default)</option>
-                {% for p in nmap_profiles %}
-                  <option value="{{ p }}">{{ p }}</option>
-                {% endfor %}
-              </select>
-              <div class="form-text">Preset scan patterns (e.g., <code>standard</code>, <code>top-ports</code>, <code>vuln-scan</code>).</div>
-            </div>
-
-            <div>
-              <label class="form-label">Extra args (optional)</label>
-              <input class="form-control" name="extra_args" placeholder="Additional nmap args, space-separated">
-            </div>
-          </div>
-
-          <!-- scapy-only options -->
-          <div id="scapyOptions" class="vstack gap-3 d-none">
-            <div>
-              <label class="form-label">ICMP probes</label>
-              <input class="form-control" name="scapy_count" placeholder="Number of probes (default 4)" inputmode="numeric" pattern="\d*">
-              <div class="form-text">Sends ICMP echo requests to the target host.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Timeout (seconds)</label>
-              <input class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
-            </div>
-
-            <div>
-              <label class="form-label">Interval (seconds)</label>
-              <input class="form-control" name="scapy_interval" placeholder="Delay between probes (default 1.0)" inputmode="decimal">
-              <div class="form-text">Set to 0 for back-to-back packets.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Payload size (bytes)</label>
-              <input class="form-control" name="scapy_payload_size" placeholder="Generated payload length (default 32)" inputmode="numeric" pattern="\d*">
-              <div class="form-text">Used when no custom payload is provided.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Custom payload (optional)</label>
-              <textarea class="form-control" name="scapy_payload_data" rows="2" placeholder="Raw data to include in the ICMP echo"></textarea>
-              <div class="form-text">UTF-8 text up to 4096 characters. Overrides the generated payload size.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Custom ICMP fields</label>
-              <div class="row g-2">
-                <div class="col-12 col-md-4">
-                  <input class="form-control" name="scapy_icmp_type" placeholder="Type (default 8)" inputmode="numeric">
-                </div>
-                <div class="col-12 col-md-4">
-                  <input class="form-control" name="scapy_icmp_code" placeholder="Code (default 0)" inputmode="numeric">
-                </div>
-                <div class="col-12 col-md-4">
-                  <input class="form-control" name="scapy_icmp_id" placeholder="Identifier" inputmode="numeric">
-                </div>
-              </div>
-              <div class="form-text">Accepts decimal or 0x-prefixed hex values for advanced ICMP packets.</div>
-            </div>
-          </div>
-
-          <div>
-            <label class="form-label">Operator</label>
-            <input class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
-          </div>
-
-          <div>
-            <label class="form-label">Engagement token</label>
-            <input class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN (required)" autocomplete="off" required>
-            <div class="form-text">Set <code>ENGAGEMENT_TOKEN</code> in your environment and paste it here for each run.</div>
-          </div>
-
-          <div class="d-flex gap-2">
-            <button class="btn btn-danger">Run Active Scan</button>
-            <span class="text-muted small align-self-center">Active scans are logged with timestamps.</span>
+            <span class="text-muted small align-self-center">Results appear below and in the dashboard history.</span>
           </div>
         </form>
       </div>
@@ -184,8 +197,8 @@
 
   </div>
 
-  <!-- Right column -->
-  <div class="col-12 col-lg-6">
+  <!-- Secondary column -->
+  <div class="col-12 col-xxl-5">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">Recent runs</div>
       <div class="card-body">

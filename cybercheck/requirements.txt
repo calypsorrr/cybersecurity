@@ -7,3 +7,4 @@ requests>=2.31.0
 python-magic>=0.4.27
 rich>=13.4.0
 sqlite-utils>=3.37
+scapy>=2.5.0

@@ -29,14 +29,11 @@
 
           <div>
             <label class="form-label">Target</label>
-            <!-- Enhanced select via Choices.js -->
             <select name="target" id="banditTarget" class="form-select">
-              <!-- Disabled placeholder at the top -->
               <option value="" selected disabled>(choose from project …)</option>
               {% for p in scan_presets %}
                 <option value="{{ p }}">{{ p }}</option>
               {% endfor %}
-              <!-- IMPORTANT: Custom path option at the END -->
               <option value="__custom__">Custom path… (type below)</option>
             </select>
             <div class="form-text">
@@ -84,6 +81,7 @@
       </div>
       <div class="card-body">
         <form method="post" action="/run_active" class="vstack gap-3" novalidate>
+
           <div>
             <label class="form-label">Tool</label>
             <select name="tool" id="activeTool" class="form-select" required>
@@ -98,7 +96,8 @@
             <input class="form-control" name="target" placeholder="target host or URL" autocomplete="off" required>
           </div>
 
-          <div id="nmapOptions" class="vstack gap-3">
+          <!-- nmap-only options -->
+          <div id="nmapOptions" class="vstack gap-3 d-none">
             <div>
               <label class="form-label">Nmap profile</label>
               <select name="nmap_profile" class="form-select">
@@ -116,6 +115,7 @@
             </div>
           </div>
 
+          <!-- scapy-only options -->
           <div id="scapyOptions" class="vstack gap-3 d-none">
             <div>
               <label class="form-label">ICMP probes</label>
@@ -126,6 +126,40 @@
             <div>
               <label class="form-label">Timeout (seconds)</label>
               <input class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
+            </div>
+
+            <div>
+              <label class="form-label">Interval (seconds)</label>
+              <input class="form-control" name="scapy_interval" placeholder="Delay between probes (default 1.0)" inputmode="decimal">
+              <div class="form-text">Set to 0 for back-to-back packets.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Payload size (bytes)</label>
+              <input class="form-control" name="scapy_payload_size" placeholder="Generated payload length (default 32)" inputmode="numeric" pattern="\d*">
+              <div class="form-text">Used when no custom payload is provided.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Custom payload (optional)</label>
+              <textarea class="form-control" name="scapy_payload_data" rows="2" placeholder="Raw data to include in the ICMP echo"></textarea>
+              <div class="form-text">UTF-8 text up to 4096 characters. Overrides the generated payload size.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Custom ICMP fields</label>
+              <div class="row g-2">
+                <div class="col-12 col-md-4">
+                  <input class="form-control" name="scapy_icmp_type" placeholder="Type (default 8)" inputmode="numeric">
+                </div>
+                <div class="col-12 col-md-4">
+                  <input class="form-control" name="scapy_icmp_code" placeholder="Code (default 0)" inputmode="numeric">
+                </div>
+                <div class="col-12 col-md-4">
+                  <input class="form-control" name="scapy_icmp_id" placeholder="Identifier" inputmode="numeric">
+                </div>
+              </div>
+              <div class="form-text">Accepts decimal or 0x-prefixed hex values for advanced ICMP packets.</div>
             </div>
           </div>
 
@@ -195,46 +229,30 @@
 
 <!-- Page-specific JS -->
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    // Initialize Choices on the Bandit Target select (forces dropdown below, adds search)
-    const choicesInstance = window.initChoices('#banditTarget');
+document.addEventListener('DOMContentLoaded', () => {
+  // Enhance the Bandit target select if Choices is available
+  if (window.initChoices) { window.initChoices('#banditTarget'); }
 
-    // Show/hide the custom path input based on selection
-    const sel = document.getElementById('banditTarget');
-    const customWrap = document.getElementById('customPathWrap');
-    function toggleCustom() {
-      const val = sel.value;
-      if (val === '__custom__') {
-        customWrap.classList.remove('d-none');
-      } else {
-        customWrap.classList.add('d-none');
-      }
-    }
-    sel.addEventListener('change', toggleCustom);
-    toggleCustom(); // initial state
+  // Custom path toggle
+  const sel = document.getElementById('banditTarget');
+  const customWrap = document.getElementById('customPathWrap');
+  const toggleCustom = () => customWrap.classList.toggle('d-none', sel.value !== '__custom__');
+  sel.addEventListener('change', toggleCustom);
+  toggleCustom();
 
-    // Toggle active-scan specific option groups
-    const activeTool = document.getElementById('activeTool');
-    const nmapOptions = document.getElementById('nmapOptions');
-    const scapyOptions = document.getElementById('scapyOptions');
+  // Active tool option groups
+  const activeTool   = document.getElementById('activeTool');
+  const nmapOptions  = document.getElementById('nmapOptions');
+  const scapyOptions = document.getElementById('scapyOptions');
 
-    function toggleActiveOptions() {
-      const tool = activeTool.value;
-      if (tool === 'nmap') {
-        nmapOptions.classList.remove('d-none');
-        scapyOptions.classList.add('d-none');
-      } else if (tool === 'scapy') {
-        nmapOptions.classList.add('d-none');
-        scapyOptions.classList.remove('d-none');
-      } else {
-        nmapOptions.classList.add('d-none');
-        scapyOptions.classList.add('d-none');
-      }
-    }
-
-    activeTool.addEventListener('change', toggleActiveOptions);
-    toggleActiveOptions();
-  });
+  const toggleActiveOptions = () => {
+    const tool = activeTool.value;
+    nmapOptions.classList.toggle('d-none', tool !== 'nmap');
+    scapyOptions.classList.toggle('d-none', tool !== 'scapy');
+  };
+  activeTool.addEventListener('change', toggleActiveOptions);
+  toggleActiveOptions();
+});
 </script>
 
 {% endblock %}

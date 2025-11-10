@@ -1,0 +1,9 @@
+Flask>=2.3
+python-dotenv>=1.0
+bandit>=1.7
+pip-audit>=2.7
+safety>=3.1
+requests>=2.31.0
+python-magic>=0.4.27
+rich>=13.4.0
+sqlite-utils>=3.37

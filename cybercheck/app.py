@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
@@ -8,6 +12,14 @@ from cybercheck.scanners import nmap_scan, nikto_scan, scapy_ping_scan
 from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
+from cybercheck.utils.monitor import network_monitor
+
+try:
+    from datetime import UTC
+except ImportError:  # pragma: no cover - Python <3.11 fallback
+    from datetime import timezone as _tz
+
+    UTC = _tz.utc
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -61,15 +73,47 @@ def list_project_targets(max_depth: int = 2) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _parse_timestamp(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        fixed = raw.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(fixed)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
+    except ValueError:
+        return None
+
+
+def _format_timestamp(dt: datetime | None) -> str:
+    if not dt:
+        return "—"
+    try:
+        return dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:  # pragma: no cover - safety guard
+        return dt.strftime("%Y-%m-%d %H:%M")
+
+
 @app.route("/")
 def index():
     runs = fetch_last_runs(20)
     presets = list_project_targets()
+    active_tools = {"nmap", "nikto", "scapy"}
+    active_runs = [r for r in runs if (r["tool"] or "").lower() in active_tools]
+    last_active = _parse_timestamp(active_runs[0]["finished_at"]) if active_runs else None
+    metrics = {
+        "total_runs": len(runs),
+        "active_runs": len(active_runs),
+        "last_active_finished": _format_timestamp(last_active),
+    }
     return render_template(
         "index.html",
         runs=runs,
         nmap_profiles=list(NMAP_PROFILES.keys()),
         scan_presets=presets,
+        metrics=metrics,
+        active_page="home",
     )
 
 
@@ -133,7 +177,13 @@ def run_non_intrusive():
             flash("Bandit exited with an error. See raw output below.", "danger")
         else:
             flash("Bandit completed with no findings.", "success")
-        return render_template("results.html", result=res, parsed_bandit=parsed, title=title)
+        return render_template(
+            "results.html",
+            result=res,
+            parsed_bandit=parsed,
+            title=title,
+            active_page="home",
+        )
 
     if tool == "pip-audit":
         res = run_tool(
@@ -146,7 +196,12 @@ def run_non_intrusive():
             flash("Dependency audit completed.", "success")
         else:
             flash("Dependency audit returned a non-zero status. See details below.", "warning")
-        return render_template("results.html", result=res, title="Dependency Audit")
+        return render_template(
+            "results.html",
+            result=res,
+            title="Dependency Audit",
+            active_page="home",
+        )
 
     flash("Unknown non-intrusive tool requested", "danger")
     return redirect(url_for("index"))
@@ -198,11 +253,22 @@ def run_active():
             else:
                 flash("Nmap completed: no hosts up.", "info")
 
-        return render_template("results.html", result=res, parsed_nmap=parsed, title=f"Nmap: {target}")
+        return render_template(
+            "results.html",
+            result=res,
+            parsed_nmap=parsed,
+            title=f"Nmap: {target}",
+            active_page="home",
+        )
 
     if tool == "nikto":
         res = nikto_scan(user=user, target_url=target)
-        return render_template("results.html", result=res, title=f"Nikto: {target}")
+        return render_template(
+            "results.html",
+            result=res,
+            title=f"Nikto: {target}",
+            active_page="home",
+        )
 
     if tool == "scapy":
         try:
@@ -239,6 +305,7 @@ def run_active():
             result=res,
             parsed_scapy=report,
             title=f"Scapy ICMP: {target}",
+            active_page="home",
         )
 
     flash("Unknown active tool.", "danger")
@@ -250,6 +317,116 @@ def api_runs():
     rows = fetch_last_runs(50)
     out = [dict(r) for r in rows]
     return jsonify(out)
+
+
+@app.route("/dashboard")
+def dashboard():
+    runs = fetch_last_runs(50)
+    totals = Counter((r["tool"] or "unknown").lower() for r in runs)
+
+    durations: list[float] = []
+    latest_finished: datetime | None = None
+    timeline: list[dict] = []
+    per_target: dict[tuple[str, str], dict] = {}
+
+    for row in runs:
+        tool = (row["tool"] or "unknown").lower()
+        target = row["target"] or "—"
+        finished = _parse_timestamp(row["finished_at"]) or _parse_timestamp(row["started_at"])
+        started = _parse_timestamp(row["started_at"])
+
+        if started and finished and finished >= started:
+            durations.append((finished - started).total_seconds())
+
+        if finished and (latest_finished is None or finished > latest_finished):
+            latest_finished = finished
+
+        returncode = row["returncode"]
+        if returncode == 0:
+            status_key, status_label, status_hint = "healthy", "Operational", "All checks passed"
+        elif returncode is None:
+            status_key, status_label, status_hint = "unknown", "Pending", "Awaiting execution"
+        elif returncode > 0:
+            status_key, status_label, status_hint = "attention", "Review findings", "Scanner reported findings"
+        else:
+            status_key, status_label, status_hint = "error", "Tool error", "Execution failed or timed out"
+
+        record_key = (tool, target)
+        previous = per_target.get(record_key)
+        if not previous or (finished and finished > previous["ts"]):
+            per_target[record_key] = {
+                "tool": tool,
+                "tool_display": tool.upper(),
+                "target": target,
+                "status_key": status_key,
+                "status_label": status_label,
+                "status_hint": status_hint,
+                "returncode": returncode,
+                "finished": finished,
+                "finished_display": _format_timestamp(finished),
+                "ts": finished or started,
+                "operator": row["user"] or "—",
+            }
+
+        timeline.append(
+            {
+                "tool": tool,
+                "tool_display": tool.upper(),
+                "target": target,
+                "operator": row["user"] or "—",
+                "finished": finished,
+                "finished_display": _format_timestamp(finished),
+                "status_key": status_key,
+                "status_hint": status_hint,
+            }
+        )
+
+    avg_duration = sum(durations) / len(durations) if durations else 0.0
+    tool_totals = [
+        {"key": key, "label": key.upper(), "count": count}
+        for key, count in sorted(totals.items(), key=lambda kv: kv[0])
+    ]
+    target_cards = sorted(
+        per_target.values(),
+        key=lambda item: item["ts"] or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
+    timeline = sorted(
+        timeline,
+        key=lambda item: item["finished"] or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )[:10]
+
+    overview = {
+        "total_runs": len(runs),
+        "avg_duration": avg_duration,
+        "last_finished": _format_timestamp(latest_finished),
+    }
+
+    return render_template(
+        "dashboard.html",
+        active_page="dashboard",
+        overview=overview,
+        tool_totals=tool_totals,
+        target_cards=target_cards,
+        timeline=timeline,
+    )
+
+
+@app.route("/monitor")
+def monitor() -> str:
+    network_monitor.ensure_running()
+    return render_template(
+        "monitor.html",
+        active_page="monitor",
+        window_seconds=network_monitor.window_seconds,
+    )
+
+
+@app.route("/api/network_snapshot")
+def api_network_snapshot():
+    network_monitor.ensure_running()
+    return jsonify(network_monitor.snapshot())
 
 
 if __name__ == "__main__":

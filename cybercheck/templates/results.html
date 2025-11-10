@@ -112,36 +112,6 @@
           <div class="fw-semibold">Packet loss</div>
           <div class="small text-muted">{{ parsed_scapy.summary.loss_pct }}%</div>
         </div>
-        <div class="col-12 col-lg-4">
-          <div class="fw-semibold">Timeout</div>
-          <div class="small text-muted">{{ parsed_scapy.summary.timeout }}s</div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="fw-semibold">Interval</div>
-          <div class="small text-muted">{{ parsed_scapy.summary.interval }}s</div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="fw-semibold">Payload</div>
-          {% set payload = parsed_scapy.summary.payload %}
-          <div class="small text-muted">
-            {% if payload %}
-              {{ payload.size }} bytes ({{ payload.mode }})
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </div>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="fw-semibold">ICMP fields</div>
-          {% set icmp = parsed_scapy.summary.icmp %}
-          <div class="small text-muted">
-            {% if icmp %}
-              type {{ icmp.type }}, code {{ icmp.code }}{% if icmp.id is not none %}, id {{ icmp.id }}{% endif %}
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </div>
-        </div>
       </div>
     </div>
   </div>

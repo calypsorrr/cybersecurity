@@ -208,41 +208,12 @@ def run_active():
         try:
             scapy_count = int((request.form.get("scapy_count") or "").strip() or 4)
             scapy_timeout = float((request.form.get("scapy_timeout") or "").strip() or 2.0)
-            scapy_interval = float((request.form.get("scapy_interval") or "").strip() or 1.0)
-            scapy_payload_size = int((request.form.get("scapy_payload_size") or "").strip() or 32)
         except ValueError:
             flash("Invalid Scapy options provided.", "danger")
             return redirect(url_for("index"))
 
-        if scapy_count <= 0 or scapy_timeout <= 0 or scapy_interval < 0 or scapy_payload_size < 0:
-            flash("Scapy count/timeout must be positive and interval/payload size cannot be negative.", "danger")
-            return redirect(url_for("index"))
-
-        if scapy_payload_size > 65500:
-            flash("Scapy payload size capped at 65500 bytes for IPv4.", "danger")
-            return redirect(url_for("index"))
-
-        payload_raw = request.form.get("scapy_payload_data")
-        payload_data = payload_raw if payload_raw else None
-        if payload_data is not None and len(payload_data) > 4096:
-            flash("Custom payload limited to 4096 characters.", "danger")
-            return redirect(url_for("index"))
-
-        def _parse_optional_int(field_name: str):
-            raw = (request.form.get(field_name) or "").strip()
-            if not raw:
-                return None
-            try:
-                return int(raw, 0)
-            except ValueError:
-                raise ValueError(f"Invalid integer for {field_name}")
-
-        try:
-            icmp_type = _parse_optional_int("scapy_icmp_type")
-            icmp_code = _parse_optional_int("scapy_icmp_code")
-            icmp_id = _parse_optional_int("scapy_icmp_id")
-        except ValueError:
-            flash("ICMP type/code/id must be integers (decimal or 0x-prefixed hex).", "danger")
+        if scapy_count <= 0 or scapy_timeout <= 0:
+            flash("Scapy count and timeout must be positive values.", "danger")
             return redirect(url_for("index"))
 
         res = scapy_ping_scan(
@@ -250,12 +221,6 @@ def run_active():
             target=target,
             count=scapy_count,
             timeout=scapy_timeout,
-            interval=scapy_interval,
-            payload_size=scapy_payload_size,
-            payload_data=payload_data,
-            icmp_type=icmp_type,
-            icmp_code=icmp_code,
-            icmp_id=icmp_id,
         )
 
         report = res.get("report") or {}

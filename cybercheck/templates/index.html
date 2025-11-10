@@ -127,40 +127,6 @@
               <label class="form-label">Timeout (seconds)</label>
               <input class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
             </div>
-
-            <div>
-              <label class="form-label">Interval (seconds)</label>
-              <input class="form-control" name="scapy_interval" placeholder="Delay between probes (default 1.0)" inputmode="decimal">
-              <div class="form-text">Set to 0 for back-to-back packets.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Payload size (bytes)</label>
-              <input class="form-control" name="scapy_payload_size" placeholder="Generated payload length (default 32)" inputmode="numeric" pattern="\d*">
-              <div class="form-text">Used when no custom payload is provided.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Custom payload (optional)</label>
-              <textarea class="form-control" name="scapy_payload_data" rows="2" placeholder="Raw data to include in the ICMP echo"></textarea>
-              <div class="form-text">UTF-8 text up to 4096 characters. Overrides the generated payload size.</div>
-            </div>
-
-            <div>
-              <label class="form-label">Custom ICMP fields</label>
-              <div class="row g-2">
-                <div class="col-12 col-md-4">
-                  <input class="form-control" name="scapy_icmp_type" placeholder="Type (default 8)" inputmode="numeric">
-                </div>
-                <div class="col-12 col-md-4">
-                  <input class="form-control" name="scapy_icmp_code" placeholder="Code (default 0)" inputmode="numeric">
-                </div>
-                <div class="col-12 col-md-4">
-                  <input class="form-control" name="scapy_icmp_id" placeholder="Identifier" inputmode="numeric">
-                </div>
-              </div>
-              <div class="form-text">Accepts decimal or 0x-prefixed hex values for advanced ICMP packets.</div>
-            </div>
           </div>
 
           <div>

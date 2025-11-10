@@ -94,6 +94,109 @@
   {% endif %}
 {% endif %}
 
+{# -------------------- Scapy parsed view -------------------- #}
+{% if parsed_scapy %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Scapy summary</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Target</div>
+          <div class="small text-muted">{{ parsed_scapy.summary.target }}</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Responses</div>
+          <div class="small text-muted">{{ parsed_scapy.summary.received }} of {{ parsed_scapy.summary.sent }}</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Packet loss</div>
+          <div class="small text-muted">{{ parsed_scapy.summary.loss_pct }}%</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Timeout</div>
+          <div class="small text-muted">{{ parsed_scapy.summary.timeout }}s</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Interval</div>
+          <div class="small text-muted">{{ parsed_scapy.summary.interval }}s</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Payload</div>
+          {% set payload = parsed_scapy.summary.payload %}
+          <div class="small text-muted">
+            {% if payload %}
+              {{ payload.size }} bytes ({{ payload.mode }})
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">ICMP fields</div>
+          {% set icmp = parsed_scapy.summary.icmp %}
+          <div class="small text-muted">
+            {% if icmp %}
+              type {{ icmp.type }}, code {{ icmp.code }}{% if icmp.id is not none %}, id {{ icmp.id }}{% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if parsed_scapy.responses and parsed_scapy.responses|length > 0 %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header fw-semibold">ICMP replies</div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Seq</th>
+                <th scope="col">Source</th>
+                <th scope="col">TTL</th>
+                <th scope="col">RTT</th>
+                <th scope="col">Summary</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in parsed_scapy.responses %}
+                <tr>
+                  <td>{{ r.seq }}</td>
+                  <td>
+                    {% if r.src %}
+                      {{ r.src }}
+                    {% else %}
+                      <span class="text-muted">timeout</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if r.ttl is not none %}
+                      {{ r.ttl }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if r.rtt_ms is not none %}
+                      {{ '%.2f'|format(r.rtt_ms) }} ms
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="small">{{ r.summary }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+
 {# -------------------- Nmap parsed view -------------------- #}
 {% if parsed_nmap %}
   <div class="card shadow-sm mb-3">

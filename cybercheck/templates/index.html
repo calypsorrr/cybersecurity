@@ -86,9 +86,10 @@
         <form method="post" action="/run_active" class="vstack gap-3" novalidate>
           <div>
             <label class="form-label">Tool</label>
-            <select name="tool" class="form-select" required>
+            <select name="tool" id="activeTool" class="form-select" required>
               <option value="nmap">nmap (port + service discovery)</option>
               <option value="nikto">nikto (HTTP vulns)</option>
+              <option value="scapy">scapy (ICMP ping)</option>
             </select>
           </div>
 
@@ -97,20 +98,69 @@
             <input class="form-control" name="target" placeholder="target host or URL" autocomplete="off" required>
           </div>
 
-          <div>
-            <label class="form-label">Nmap profile</label>
-            <select name="nmap_profile" class="form-select">
-              <option value="">(default)</option>
-              {% for p in nmap_profiles %}
-                <option value="{{ p }}">{{ p }}</option>
-              {% endfor %}
-            </select>
-            <div class="form-text">Preset scan patterns (e.g., <code>standard</code>, <code>top-ports</code>, <code>vuln-scan</code>).</div>
+          <div id="nmapOptions" class="vstack gap-3">
+            <div>
+              <label class="form-label">Nmap profile</label>
+              <select name="nmap_profile" class="form-select">
+                <option value="">(default)</option>
+                {% for p in nmap_profiles %}
+                  <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Preset scan patterns (e.g., <code>standard</code>, <code>top-ports</code>, <code>vuln-scan</code>).</div>
+            </div>
+
+            <div>
+              <label class="form-label">Extra args (optional)</label>
+              <input class="form-control" name="extra_args" placeholder="Additional nmap args, space-separated">
+            </div>
           </div>
 
-          <div>
-            <label class="form-label">Extra args (optional)</label>
-            <input class="form-control" name="extra_args" placeholder="Additional nmap args, space-separated">
+          <div id="scapyOptions" class="vstack gap-3 d-none">
+            <div>
+              <label class="form-label">ICMP probes</label>
+              <input class="form-control" name="scapy_count" placeholder="Number of probes (default 4)" inputmode="numeric" pattern="\d*">
+              <div class="form-text">Sends ICMP echo requests to the target host.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Timeout (seconds)</label>
+              <input class="form-control" name="scapy_timeout" placeholder="Reply timeout per probe (default 2.0)" inputmode="decimal">
+            </div>
+
+            <div>
+              <label class="form-label">Interval (seconds)</label>
+              <input class="form-control" name="scapy_interval" placeholder="Delay between probes (default 1.0)" inputmode="decimal">
+              <div class="form-text">Set to 0 for back-to-back packets.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Payload size (bytes)</label>
+              <input class="form-control" name="scapy_payload_size" placeholder="Generated payload length (default 32)" inputmode="numeric" pattern="\d*">
+              <div class="form-text">Used when no custom payload is provided.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Custom payload (optional)</label>
+              <textarea class="form-control" name="scapy_payload_data" rows="2" placeholder="Raw data to include in the ICMP echo"></textarea>
+              <div class="form-text">UTF-8 text up to 4096 characters. Overrides the generated payload size.</div>
+            </div>
+
+            <div>
+              <label class="form-label">Custom ICMP fields</label>
+              <div class="row g-2">
+                <div class="col-12 col-md-4">
+                  <input class="form-control" name="scapy_icmp_type" placeholder="Type (default 8)" inputmode="numeric">
+                </div>
+                <div class="col-12 col-md-4">
+                  <input class="form-control" name="scapy_icmp_code" placeholder="Code (default 0)" inputmode="numeric">
+                </div>
+                <div class="col-12 col-md-4">
+                  <input class="form-control" name="scapy_icmp_id" placeholder="Identifier" inputmode="numeric">
+                </div>
+              </div>
+              <div class="form-text">Accepts decimal or 0x-prefixed hex values for advanced ICMP packets.</div>
+            </div>
           </div>
 
           <div>
@@ -196,6 +246,28 @@
     }
     sel.addEventListener('change', toggleCustom);
     toggleCustom(); // initial state
+
+    // Toggle active-scan specific option groups
+    const activeTool = document.getElementById('activeTool');
+    const nmapOptions = document.getElementById('nmapOptions');
+    const scapyOptions = document.getElementById('scapyOptions');
+
+    function toggleActiveOptions() {
+      const tool = activeTool.value;
+      if (tool === 'nmap') {
+        nmapOptions.classList.remove('d-none');
+        scapyOptions.classList.add('d-none');
+      } else if (tool === 'scapy') {
+        nmapOptions.classList.add('d-none');
+        scapyOptions.classList.remove('d-none');
+      } else {
+        nmapOptions.classList.add('d-none');
+        scapyOptions.classList.add('d-none');
+      }
+    }
+
+    activeTool.addEventListener('change', toggleActiveOptions);
+    toggleActiveOptions();
   });
 </script>
 

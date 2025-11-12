@@ -349,4 +349,5 @@ body.sidebar-open .sidebar-backdrop { opacity: 1; visibility: visible; }
 /* keep sidebar above its backdrop but below the header */
 .app-sidebar {
   z-index: 1045;
+  flex: 0 0 280px;
 }

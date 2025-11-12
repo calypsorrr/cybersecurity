@@ -207,8 +207,20 @@ body {
 .status-card.status-error     { background: linear-gradient(140deg, #ef4444, #b91c1c); }
 .status-card.status-unknown   { background: linear-gradient(140deg, #64748b, #475569); }
 .status-card .status-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.18em; opacity: 0.85; }
-.status-card .status-headline { font-size: 1.4rem; font-weight: 700; margin-top: 0.45rem; }
-.status-card .status-meta { font-size: 0.85rem; margin-top: 0.35rem; opacity: 0.85; }
+.status-card .status-headline {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-top: 0.45rem;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.status-card .status-meta {
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+  opacity: 0.85;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 
 .timeline-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
 .timeline-item {

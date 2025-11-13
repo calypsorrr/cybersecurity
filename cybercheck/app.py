@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import shlex
 from datetime import datetime
 from pathlib import Path
 import os
@@ -9,6 +10,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from cybercheck.config import SECRET_KEY, NMAP_PROFILES
 from cybercheck.utils.auth import require_active_session
 from cybercheck.scanners import nmap_scan, nikto_scan, scapy_ping_scan
+from cybercheck.scanners import run_ettercap
 from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
@@ -22,6 +24,48 @@ except ImportError:  # pragma: no cover - Python <3.11 fallback
     UTC = _tz.utc
 
 BASE_DIR = Path(__file__).resolve().parent
+
+ETTERCAP_MITM_METHODS = [
+    {
+        "value": "arp",
+        "label": "ARP poisoning (LAN)",
+        "summary": "Classic gateway spoofing between target hosts on the same broadcast domain.",
+    },
+    {
+        "value": "arp:remote",
+        "label": "ARP remote",
+        "summary": "Like ARP poisoning but relays packets between distant segments; slower but flexible.",
+    },
+    {
+        "value": "icmp",
+        "label": "ICMP redirect",
+        "summary": "Rewrite ICMP redirects to pull traffic through your interface.",
+    },
+    {
+        "value": "dhcp",
+        "label": "DHCP spoof",
+        "summary": "Answer DHCP queries with crafted options to steer victims.",
+    },
+]
+
+ETTERCAP_CAPABILITIES = [
+    {
+        "title": "Unified sniffing",
+        "body": "Mirror the <code>ettercap -T -q -i iface</code> workflow with optional filters, plugins and capture files.",
+    },
+    {
+        "title": "MITM pivot",
+        "body": "Launch ARP, ICMP or DHCP based attacks without leaving the web console. Targets use the familiar /target/ notation.",
+    },
+    {
+        "title": "Host discovery sweeps",
+        "body": "Run remote ARP poisoning against CIDR ranges to quickly enumerate active clients inside the engagement scope.",
+    },
+    {
+        "title": "Custom CLI wrapper",
+        "body": "Feed any Ettercap arguments you'd normally run on Linux and capture stdout/stderr plus logs in the dashboard.",
+    },
+]
 
 app = Flask(
     __name__,
@@ -245,6 +289,109 @@ def scan_help():
         guides=scan_guides,
         decision_matrix=decision_matrix,
         nmap_profiles=NMAP_PROFILES,
+    )
+
+
+@app.route("/ettercap")
+def ettercap_console():
+    return render_template(
+        "ettercap.html",
+        active_page="ettercap",
+        mitm_methods=ETTERCAP_MITM_METHODS,
+        capabilities=ETTERCAP_CAPABILITIES,
+    )
+
+
+@app.route("/run_ettercap", methods=["POST"])
+def run_ettercap_route():
+    token = request.form.get("engagement_token")
+    if not require_active_session(token or ""):
+        flash("Invalid or missing engagement token.", "danger")
+        return redirect(url_for("ettercap_console"))
+
+    operation = (request.form.get("operation") or "sniff").strip() or "sniff"
+    interface = (request.form.get("interface") or "").strip()
+    user = (request.form.get("user") or "operator").strip() or "operator"
+    quiet = request.form.get("quiet", "0") == "1"
+    text_mode = request.form.get("text_mode", "0") == "1"
+    plugin = (request.form.get("plugin") or "").strip() or None
+    filter_script = (request.form.get("filter_script") or "").strip() or None
+    log_file = (request.form.get("log_file") or "").strip() or None
+    pcap_file = (request.form.get("pcap_file") or "").strip() or None
+    target_a = (request.form.get("target_a") or "").strip() or None
+    target_b = (request.form.get("target_b") or "").strip() or None
+    mitm_method = (request.form.get("mitm_method") or "").strip() or None
+    extra_args_raw = (request.form.get("extra_args") or "").strip()
+    custom_args_raw = (request.form.get("custom_args") or "").strip()
+
+    if not interface:
+        flash("Interface is required for Ettercap operations.", "danger")
+        return redirect(url_for("ettercap_console"))
+
+    if operation == "mitm" and (not target_a or not target_b):
+        flash("Target A and Target B are required for MITM runs.", "danger")
+        return redirect(url_for("ettercap_console"))
+
+    if operation == "scan" and not target_a:
+        flash("Provide at least one network or host list for discovery sweeps.", "danger")
+        return redirect(url_for("ettercap_console"))
+
+    extra_args = None
+    if extra_args_raw:
+        try:
+            extra_args = shlex.split(extra_args_raw)
+        except ValueError:
+            flash("Unable to parse extra arguments. Use space-separated syntax like on Linux.", "danger")
+            return redirect(url_for("ettercap_console"))
+
+    custom_args = None
+    if operation == "custom":
+        if not custom_args_raw:
+            flash("Provide Ettercap arguments for custom runs.", "danger")
+            return redirect(url_for("ettercap_console"))
+        try:
+            custom_args = shlex.split(custom_args_raw)
+        except ValueError:
+            flash("Unable to parse custom Ettercap arguments.", "danger")
+            return redirect(url_for("ettercap_console"))
+
+    try:
+        res = run_ettercap(
+            user=user,
+            interface=interface,
+            operation=operation,
+            quiet=quiet,
+            text_mode=text_mode,
+            target_a=target_a,
+            target_b=target_b,
+            mitm_method=mitm_method,
+            plugin=plugin,
+            filter_script=filter_script,
+            log_file=log_file,
+            pcap_file=pcap_file,
+            extra_args=extra_args,
+            custom_args=custom_args,
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("ettercap_console"))
+
+    summary = res.get("ettercap_summary")
+    title = "Ettercap run"
+    if summary and summary.get("operation_label"):
+        title = f"Ettercap — {summary['operation_label']}"
+
+    if res.get("returncode", 0) == 0:
+        flash("Ettercap run completed.", "success")
+    else:
+        flash("Ettercap exited with warnings/errors. Review the output below.", "warning")
+
+    return render_template(
+        "results.html",
+        result=res,
+        parsed_ettercap=summary,
+        title=title,
+        active_page="ettercap",
     )
 
 

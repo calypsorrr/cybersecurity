@@ -40,6 +40,30 @@
   </div>
 </div>
 
+<div class="row g-4 mt-1" id="monitorSecondaryMetrics">
+  <div class="col-xl-4 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Window data</span>
+      <span class="metric-value" data-field="window.bytes">—</span>
+      <span class="metric-subtext">Bytes captured in the rolling window</span>
+    </div>
+  </div>
+  <div class="col-xl-4 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Bandwidth</span>
+      <span class="metric-value" data-field="window.bandwidth">—</span>
+      <span class="metric-subtext">Approximate bytes per second</span>
+    </div>
+  </div>
+  <div class="col-xl-4 col-md-6">
+    <div class="metric-card">
+      <span class="metric-label">Unique hosts</span>
+      <span class="metric-value" data-field="unique_hosts">—</span>
+      <span class="metric-subtext">Sources and destinations seen</span>
+    </div>
+  </div>
+</div>
+
 <div class="row g-4 mt-1">
   <div class="col-lg-7">
     <div class="card shadow-sm border-0 h-100">
@@ -68,6 +92,51 @@
             <ul class="monitor-list" id="topDestinations"></ul>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <h2 class="h5 mb-0">Top destination ports</h2>
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-12">
+            <h3 class="h6 text-uppercase text-muted fw-semibold">All captures</h3>
+            <ul class="monitor-list" id="topPorts"></ul>
+          </div>
+          <div class="col-12">
+            <h3 class="h6 text-uppercase text-muted fw-semibold">Active window</h3>
+            <ul class="monitor-list" id="activePorts"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <h2 class="h5 mb-0">Fan-out watch</h2>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle monitor-table">
+            <thead>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col" class="text-center">Unique destinations</th>
+                <th scope="col" class="text-end">Packets</th>
+              </tr>
+            </thead>
+            <tbody id="fanOutTable"></tbody>
+          </table>
+        </div>
+        <p class="text-muted small mb-0">Borrowing ideas from community packet monitors, this section surfaces hosts that quickly
+          speak to many peers – a common sign of reconnaissance or worm traffic.</p>
       </div>
     </div>
   </div>
@@ -129,6 +198,9 @@
     const protocolList = document.getElementById('protocolList');
     const topSources = document.getElementById('topSources');
     const topDestinations = document.getElementById('topDestinations');
+    const topPorts = document.getElementById('topPorts');
+    const activePorts = document.getElementById('activePorts');
+    const fanOutTable = document.getElementById('fanOutTable');
     const alertFeed = document.getElementById('alertFeed');
     const recentTable = document.getElementById('recentPackets');
     const alertCount = document.getElementById('alertCount');
@@ -175,12 +247,19 @@
 
     function setMetric(field, value) {
       let display = value;
-      if (field === 'totals.bytes') {
+      if (field === 'totals.bytes' || field === 'window.bytes') {
         display = formatBytes(value);
       } else if (field === 'uptime') {
         display = formatUptime(value);
       } else if (field === 'window.rate') {
         display = value ? value.toFixed(1) : '0.0';
+      } else if (field === 'window.bandwidth') {
+        if (!value || value <= 0) {
+          display = '0 B/s';
+        } else {
+          const perSec = formatBytes(value);
+          display = `${perSec}/s`;
+        }
       } else {
         display = formatNumber(value);
       }
@@ -240,6 +319,22 @@
         clone.querySelector('.alert-message').textContent = entry.message;
         clone.querySelector('.alert-time').textContent = new Date(entry.time).toLocaleTimeString('en-GB', { hour12: false });
         alertFeed.appendChild(clone);
+      });
+    }
+
+    function renderFanOut(entries) {
+      fanOutTable.innerHTML = '';
+      if (!entries || !entries.length) {
+        fanOutTable.innerHTML = '<tr><td colspan="3" class="text-muted small">No high fan-out sources detected in the current window.</td></tr>';
+        return;
+      }
+      entries.forEach(entry => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${entry.source}</td>
+          <td class="text-center">${formatNumber(entry.unique_destinations)}</td>
+          <td class="text-end">${formatNumber(entry.packets)}</td>`;
+        fanOutTable.appendChild(tr);
       });
     }
 
@@ -305,6 +400,9 @@
           renderProtocols(snapshot.protocols);
           renderList(topSources, snapshot.top_sources);
           renderList(topDestinations, snapshot.top_destinations);
+          renderList(topPorts, snapshot.top_ports);
+          renderList(activePorts, snapshot.window ? snapshot.window.port_activity : []);
+          renderFanOut(snapshot.fan_out);
           renderAlerts(snapshot.alert_log);
           renderRecent(snapshot.recent_packets);
         })

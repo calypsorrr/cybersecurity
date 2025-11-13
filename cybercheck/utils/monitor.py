@@ -48,6 +48,8 @@ class PacketRecord:
     ts: float
     src: str
     dst: str
+    size: int
+    dst_port_label: str
 
 
 class NetworkMonitor:
@@ -61,12 +63,18 @@ class NetworkMonitor:
         window_seconds: int = 10,
         alert_threshold: int = 120,
         dst_threshold: int = 160,
+        fanout_threshold: int = 18,
+        port_focus_threshold: int = 140,
+        bandwidth_threshold: int = 250_000,
     ) -> None:
         self.interface = interface
         self.bpf_filter = bpf_filter
         self.window_seconds = window_seconds
         self.alert_threshold = alert_threshold
         self.dst_threshold = dst_threshold
+        self.fanout_threshold = fanout_threshold
+        self.port_focus_threshold = port_focus_threshold
+        self.bandwidth_threshold = bandwidth_threshold
 
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
@@ -79,11 +87,15 @@ class NetworkMonitor:
         self._protocols: Counter[str] = Counter()
         self._src_counter: Counter[str] = Counter()
         self._dst_counter: Counter[str] = Counter()
+        self._dst_port_counter: Counter[str] = Counter()
 
         self._recent_packets: Deque[Dict[str, object]] = deque(maxlen=40)
         self._window: Deque[PacketRecord] = deque()
         self._window_src: Counter[str] = Counter()
         self._window_dst: Counter[str] = Counter()
+        self._window_port_counter: Counter[str] = Counter()
+        self._window_bytes = 0
+        self._window_src_unique: Dict[str, Counter[str]] = {}
         self._alert_log: Deque[Dict[str, object]] = deque(maxlen=50)
 
     # ------------------------------------------------------------------
@@ -142,11 +154,18 @@ class NetworkMonitor:
         proto = "OTHER"
         src = "?"
         dst = "?"
+        dst_port_label = "—"
 
         if packet.haslayer(TCP):
             proto = "TCP"
+            dst_port = getattr(packet[TCP], "dport", None)
+            if dst_port is not None:
+                dst_port_label = f"{dst_port}/tcp"
         elif packet.haslayer(UDP):
             proto = "UDP"
+            dst_port = getattr(packet[UDP], "dport", None)
+            if dst_port is not None:
+                dst_port_label = f"{dst_port}/udp"
         elif packet.haslayer(ICMP):
             proto = "ICMP"
         elif packet.haslayer(ARP):
@@ -170,6 +189,7 @@ class NetworkMonitor:
             self._protocols[proto] += 1
             self._src_counter[src] += 1
             self._dst_counter[dst] += 1
+            self._dst_port_counter[dst_port_label] += 1
 
             self._recent_packets.appendleft(
                 {
@@ -182,9 +202,15 @@ class NetworkMonitor:
                 }
             )
 
-            self._window.append(PacketRecord(ts=now, src=src, dst=dst))
+            self._window.append(
+                PacketRecord(ts=now, src=src, dst=dst, size=size, dst_port_label=dst_port_label)
+            )
             self._window_src[src] += 1
             self._window_dst[dst] += 1
+            self._window_port_counter[dst_port_label] += 1
+            self._window_bytes += size
+            per_src = self._window_src_unique.setdefault(src, Counter())
+            per_src[dst] += 1
 
             self._prune_window(now)
             self._evaluate_alerts(now)
@@ -199,9 +225,22 @@ class NetworkMonitor:
             self._window_dst[record.dst] -= 1
             if self._window_dst[record.dst] <= 0:
                 del self._window_dst[record.dst]
+            self._window_port_counter[record.dst_port_label] -= 1
+            if self._window_port_counter[record.dst_port_label] <= 0:
+                del self._window_port_counter[record.dst_port_label]
+            self._window_bytes = max(self._window_bytes - record.size, 0)
+
+            per_src = self._window_src_unique.get(record.src)
+            if per_src:
+                per_src[record.dst] -= 1
+                if per_src[record.dst] <= 0:
+                    del per_src[record.dst]
+                if not per_src:
+                    del self._window_src_unique[record.src]
 
     def _evaluate_alerts(self, now: float) -> None:
         window_packets = _total(self._window_src)
+        window_bytes = self._window_bytes
 
         def _log(message: str, severity: str = "warning") -> None:
             recent = self._alert_log[0]["message"] if self._alert_log else None
@@ -235,6 +274,29 @@ class NetworkMonitor:
                 severity="warning",
             )
 
+        if self.window_seconds:
+            bandwidth = window_bytes / self.window_seconds
+            if bandwidth >= self.bandwidth_threshold:
+                _log(
+                    f"High bandwidth condition: ~{int(bandwidth)} B/s observed in the last {self.window_seconds}s",
+                    severity="warning",
+                )
+
+        for src, dsts in list(self._window_src_unique.items()):
+            unique_dest = len(dsts)
+            if unique_dest >= self.fanout_threshold:
+                _log(
+                    f"Fan-out sweep detected: {src} contacted {unique_dest} destinations in {self.window_seconds}s",
+                    severity="warning",
+                )
+
+        for port_label, count in list(self._window_port_counter.items()):
+            if port_label != "—" and count >= self.port_focus_threshold:
+                _log(
+                    f"Port focus observed: {count} packets targeting {port_label} in {self.window_seconds}s",
+                    severity="danger",
+                )
+
     # ------------------------------------------------------------------
     # Data exposure
     def snapshot(self) -> Dict[str, object]:
@@ -251,6 +313,20 @@ class NetworkMonitor:
 
             window_packets = _total(self._window_src)
             rate = (window_packets / self.window_seconds) if self.window_seconds else 0.0
+            window_bytes = self._window_bytes
+            bandwidth = (window_bytes / self.window_seconds) if self.window_seconds else 0.0
+
+            fan_out_list = [
+                {
+                    "source": src,
+                    "unique_destinations": len(dsts),
+                    "packets": int(sum(dsts.values())),
+                }
+                for src, dsts in self._window_src_unique.items()
+                if dsts
+            ]
+            fan_out_list.sort(key=lambda item: (item["unique_destinations"], item["packets"]), reverse=True)
+            fan_out_list = fan_out_list[:5]
 
             return {
                 "running": self._running,
@@ -263,12 +339,18 @@ class NetworkMonitor:
                 "protocols": protocols,
                 "top_sources": _format_counter(self._src_counter),
                 "top_destinations": _format_counter(self._dst_counter),
+                "top_ports": _format_counter(self._dst_port_counter),
                 "recent_packets": list(self._recent_packets)[:10],
                 "alert_log": list(self._alert_log)[:10],
+                "unique_hosts": len(set(self._src_counter) | set(self._dst_counter)),
+                "fan_out": fan_out_list,
                 "window": {
                     "seconds": self.window_seconds,
                     "packets": window_packets,
                     "rate": rate,
+                    "bytes": window_bytes,
+                    "bandwidth": bandwidth,
+                    "port_activity": _format_counter(self._window_port_counter),
                 },
             }
 

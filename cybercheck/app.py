@@ -4,8 +4,10 @@ from collections import Counter
 import shlex
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from tempfile import NamedTemporaryFile
 
 from cybercheck.config import SECRET_KEY, NMAP_PROFILES
 from cybercheck.utils.auth import require_active_session
@@ -15,6 +17,7 @@ from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.monitor import network_monitor
+from cybercheck.utils.capture import analyze_pcap_file
 
 try:
     from datetime import UTC
@@ -289,6 +292,78 @@ def scan_help():
         guides=scan_guides,
         decision_matrix=decision_matrix,
         nmap_profiles=NMAP_PROFILES,
+    )
+
+
+@app.route("/wireshark")
+def wireshark_console():
+    default_state = {
+        "user": "pcap-operator",
+        "include_hex": False,
+    }
+    return render_template(
+        "wireshark.html",
+        active_page="wireshark",
+        form_state=default_state,
+        analysis=None,
+    )
+
+
+@app.route("/wireshark/analyze", methods=["POST"])
+def wireshark_analyze():
+    token = request.form.get("engagement_token")
+    if not require_active_session(token or ""):
+        flash("Valid engagement token required for PCAP reviews.", "danger")
+        return redirect(url_for("wireshark_console"))
+
+    uploaded = request.files.get("pcap_file")
+    if not uploaded or not uploaded.filename:
+        flash("Choose a PCAP file to analyze.", "warning")
+        return redirect(url_for("wireshark_console"))
+
+    user = (request.form.get("user") or "pcap-operator").strip() or "pcap-operator"
+    include_hex = request.form.get("include_hex", "0") == "1"
+    original_name = Path(uploaded.filename).name
+
+    temp_path: Optional[Path] = None
+    try:
+        with NamedTemporaryFile(delete=False, suffix=".pcap") as temp_file:
+            uploaded.save(temp_file.name)
+            temp_path = Path(temp_file.name)
+
+        analysis = analyze_pcap_file(
+            user=user,
+            file_path=temp_path,
+            include_hex=include_hex,
+            original_name=original_name,
+        )
+    finally:
+        if temp_path and temp_path.exists():
+            temp_path.unlink(missing_ok=True)
+
+    returncode = analysis.get("returncode", 0)
+    summary = (analysis.get("report") or {}).get("summary") or {}
+    packet_count = summary.get("captured", 0)
+    label = summary.get("source_label", original_name)
+
+    if returncode == 0:
+        flash(f"Analyzed {packet_count} packets from {label}.", "success")
+    elif returncode == 1 and not analysis.get("stderr"):
+        flash("The supplied PCAP did not contain any packets.", "warning")
+    else:
+        error = analysis.get("stderr") or "Failed to parse the uploaded PCAP file."
+        flash(error, "danger")
+
+    form_state = {
+        "user": user,
+        "include_hex": include_hex,
+    }
+
+    return render_template(
+        "wireshark.html",
+        active_page="wireshark",
+        form_state=form_state,
+        analysis=analysis,
     )
 
 

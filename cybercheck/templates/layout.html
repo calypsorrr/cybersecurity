@@ -56,6 +56,13 @@
                 <small class="d-block text-muted">Packet telemetry & alerts</small>
               </span>
             </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'wireshark' else '' }}" href="{{ url_for('wireshark_console') }}">
+              <span class="sidebar-icon" aria-hidden="true">🦈</span>
+              <span>
+                <strong>In-house Wireshark</strong>
+                <small class="d-block text-muted">Capture + decode from the browser</small>
+              </span>
+            </a>
             <a class="nav-link {{ 'active' if (active_page|default('')) == 'dashboard' else '' }}" href="{{ url_for('dashboard') }}">
               <span class="sidebar-icon" aria-hidden="true">📊</span>
               <span>

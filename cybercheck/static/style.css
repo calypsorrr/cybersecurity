@@ -328,6 +328,8 @@ body {
 }
 .monitor-list .badge { font-size: 0.75rem; background: rgba(37, 99, 235, 0.15); color: #1d4ed8; }
 
+.bandwidth-chart { height: 280px; }
+
 .alert-feed { display: grid; gap: 0.75rem; }
 .monitor-alert {
   border-radius: 0.85rem; margin: 0; background: rgba(15, 23, 42, 0.04); border: none;

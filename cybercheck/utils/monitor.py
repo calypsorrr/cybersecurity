@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import threading
 import time
-from typing import Deque, Dict, List, Optional
+from typing import Deque, Dict, List, Optional, Set
+import socket
 
 try:  # pragma: no cover - fallback for Python <3.11
     from datetime import UTC
@@ -43,6 +44,34 @@ def _format_counter(counter: Counter, limit: int = 5) -> List[Dict[str, object]]
     ]
 
 
+def _discover_local_ips() -> Set[str]:
+    """Collect a best-effort set of local interface addresses."""
+
+    ips: Set[str] = {"127.0.0.1"}
+
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None):
+            addr = info[4][0]
+            if ":" not in addr and addr:
+                ips.add(addr)
+    except Exception:
+        pass
+
+    try:  # pragma: no cover - depends on Scapy runtime availability
+        from scapy.all import conf  # type: ignore
+
+        for route in getattr(conf.route, "routes", []):
+            if len(route) >= 5:
+                addr = route[4]
+                if addr and addr != "0.0.0.0":
+                    ips.add(addr)
+    except Exception:
+        pass
+
+    return ips
+
+
 @dataclass
 class PacketRecord:
     ts: float
@@ -50,6 +79,7 @@ class PacketRecord:
     dst: str
     size: int
     dst_port_label: str
+    direction: str
 
 
 class NetworkMonitor:
@@ -82,6 +112,8 @@ class NetworkMonitor:
         self._error: Optional[str] = None
         self._started_at: Optional[datetime] = None
 
+        self._local_ips: Set[str] = _discover_local_ips()
+
         self._packet_total = 0
         self._byte_total = 0
         self._protocols: Counter[str] = Counter()
@@ -95,8 +127,13 @@ class NetworkMonitor:
         self._window_dst: Counter[str] = Counter()
         self._window_port_counter: Counter[str] = Counter()
         self._window_bytes = 0
+        self._window_inbound_bytes = 0
+        self._window_outbound_bytes = 0
         self._window_src_unique: Dict[str, Counter[str]] = {}
         self._alert_log: Deque[Dict[str, object]] = deque(maxlen=50)
+        self._bandwidth_history: Deque[Dict[str, object]] = deque(maxlen=240)
+        self._history_bucket_ts: Optional[int] = None
+        self._history_bucket: Optional[Dict[str, object]] = None
 
     # ------------------------------------------------------------------
     # Thread lifecycle
@@ -191,6 +228,9 @@ class NetworkMonitor:
             self._dst_counter[dst] += 1
             self._dst_port_counter[dst_port_label] += 1
 
+            direction = self._classify_direction(src, dst)
+            self._accumulate_bandwidth_history(now, size, direction)
+
             self._recent_packets.appendleft(
                 {
                     "time": datetime.fromtimestamp(now, tz=UTC).isoformat(),
@@ -203,17 +243,56 @@ class NetworkMonitor:
             )
 
             self._window.append(
-                PacketRecord(ts=now, src=src, dst=dst, size=size, dst_port_label=dst_port_label)
+                PacketRecord(
+                    ts=now,
+                    src=src,
+                    dst=dst,
+                    size=size,
+                    dst_port_label=dst_port_label,
+                    direction=direction,
+                )
             )
             self._window_src[src] += 1
             self._window_dst[dst] += 1
             self._window_port_counter[dst_port_label] += 1
             self._window_bytes += size
+            if direction == "inbound":
+                self._window_inbound_bytes += size
+            elif direction == "outbound":
+                self._window_outbound_bytes += size
             per_src = self._window_src_unique.setdefault(src, Counter())
             per_src[dst] += 1
 
             self._prune_window(now)
             self._evaluate_alerts(now)
+
+    def _classify_direction(self, src: str, dst: str) -> str:
+        if src in self._local_ips:
+            return "outbound"
+        if dst in self._local_ips:
+            return "inbound"
+        return "external"
+
+    def _accumulate_bandwidth_history(self, now: float, size: int, direction: str) -> None:
+        bucket_ts = int(now)
+        if self._history_bucket_ts != bucket_ts:
+            if self._history_bucket:
+                self._bandwidth_history.append(self._history_bucket)
+            self._history_bucket_ts = bucket_ts
+            self._history_bucket = {
+                "ts": bucket_ts,
+                "inbound": 0,
+                "outbound": 0,
+                "external": 0,
+            }
+        if self._history_bucket is None:
+            return
+        if direction == "inbound":
+            self._history_bucket["inbound"] += size
+        elif direction == "outbound":
+            self._history_bucket["outbound"] += size
+        else:
+            self._history_bucket["external"] += size
 
     def _prune_window(self, now: float) -> None:
         cutoff = now - self.window_seconds
@@ -229,6 +308,10 @@ class NetworkMonitor:
             if self._window_port_counter[record.dst_port_label] <= 0:
                 del self._window_port_counter[record.dst_port_label]
             self._window_bytes = max(self._window_bytes - record.size, 0)
+            if record.direction == "inbound":
+                self._window_inbound_bytes = max(self._window_inbound_bytes - record.size, 0)
+            elif record.direction == "outbound":
+                self._window_outbound_bytes = max(self._window_outbound_bytes - record.size, 0)
 
             per_src = self._window_src_unique.get(record.src)
             if per_src:
@@ -315,6 +398,8 @@ class NetworkMonitor:
             rate = (window_packets / self.window_seconds) if self.window_seconds else 0.0
             window_bytes = self._window_bytes
             bandwidth = (window_bytes / self.window_seconds) if self.window_seconds else 0.0
+            inbound_rate = (self._window_inbound_bytes / self.window_seconds) if self.window_seconds else 0.0
+            outbound_rate = (self._window_outbound_bytes / self.window_seconds) if self.window_seconds else 0.0
 
             fan_out_list = [
                 {
@@ -327,6 +412,10 @@ class NetworkMonitor:
             ]
             fan_out_list.sort(key=lambda item: (item["unique_destinations"], item["packets"]), reverse=True)
             fan_out_list = fan_out_list[:5]
+
+            history = list(self._bandwidth_history)
+            if self._history_bucket:
+                history.append(dict(self._history_bucket))
 
             return {
                 "running": self._running,
@@ -350,8 +439,13 @@ class NetworkMonitor:
                     "rate": rate,
                     "bytes": window_bytes,
                     "bandwidth": bandwidth,
+                    "inbound_bytes": self._window_inbound_bytes,
+                    "outbound_bytes": self._window_outbound_bytes,
+                    "inbound_rate": inbound_rate,
+                    "outbound_rate": outbound_rate,
                     "port_activity": _format_counter(self._window_port_counter),
                 },
+                "bandwidth_history": history,
             }
 
 

@@ -65,6 +65,27 @@
 </div>
 
 <div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div>
+            <h2 class="h5 mb-0">Ingress vs egress</h2>
+            <p class="text-muted small mb-0">Live bytes per second observed across the monitored interface.</p>
+          </div>
+          <span class="badge rounded-pill text-bg-light text-dark">1s buckets</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="bandwidth-chart">
+          <canvas id="bandwidthChart" aria-label="Bandwidth over time" role="img"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
   <div class="col-lg-7">
     <div class="card shadow-sm border-0 h-100">
       <div class="card-header bg-white border-0 pt-4 pb-3">
@@ -192,6 +213,7 @@
   </div>
 </template>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-b4vSyoSgGJE0RZFAZqJtpo68fBdXrqMJ+ijcck6OD6IVa6kCNwC8+AR1+8ZFo6mK" crossorigin="anonymous"></script>
 <script>
   (() => {
     const statusEl = document.getElementById('monitorStatus');
@@ -206,6 +228,8 @@
     const alertCount = document.getElementById('alertCount');
     const recentCount = document.getElementById('recentCount');
     const alertTemplate = document.getElementById('alertTemplate');
+    const bandwidthChartEl = document.getElementById('bandwidthChart');
+    let bandwidthChart = null;
 
     const metricFields = document.querySelectorAll('[data-field]');
 
@@ -357,6 +381,69 @@
       });
     }
 
+    function renderBandwidth(history) {
+      if (!bandwidthChartEl || typeof Chart === 'undefined') return;
+      const entries = (history || []).slice(-90); // keep roughly last ~90 seconds
+      const labels = entries.map(entry => new Date(entry.ts * 1000).toLocaleTimeString('en-GB', { hour12: false }));
+      const inbound = entries.map(entry => Math.round(entry.inbound || 0));
+      const outbound = entries.map(entry => Math.round(entry.outbound || 0));
+      const datasets = [
+        {
+          label: 'Incoming',
+          data: inbound,
+          fill: false,
+          borderColor: 'rgba(16, 185, 129, 1)',
+          backgroundColor: 'rgba(16, 185, 129, 0.2)',
+          tension: 0.25,
+        },
+        {
+          label: 'Outgoing',
+          data: outbound,
+          fill: false,
+          borderColor: 'rgba(59, 130, 246, 1)',
+          backgroundColor: 'rgba(59, 130, 246, 0.2)',
+          tension: 0.25,
+        },
+      ];
+
+      if (!bandwidthChart) {
+        bandwidthChart = new Chart(bandwidthChartEl, {
+          type: 'line',
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => `${ctx.dataset.label}: ${formatBytes(ctx.parsed.y)}/s`,
+                },
+              },
+            },
+            scales: {
+              y: {
+                ticks: {
+                  callback: (value) => `${formatBytes(value)}/s`,
+                },
+                beginAtZero: true,
+              },
+              x: {
+                ticks: { maxTicksLimit: 6 },
+              },
+            },
+          },
+        });
+      } else {
+        bandwidthChart.data.labels = labels;
+        bandwidthChart.data.datasets.forEach((dataset, idx) => {
+          dataset.data = idx === 0 ? inbound : outbound;
+        });
+        bandwidthChart.update('none');
+      }
+    }
+
     const metricData = {};
 
     function assignValue(path, value) {
@@ -405,6 +492,7 @@
           renderFanOut(snapshot.fan_out);
           renderAlerts(snapshot.alert_log);
           renderRecent(snapshot.recent_packets);
+          renderBandwidth(snapshot.bandwidth_history);
         })
         .catch(err => {
           statusEl.innerHTML = `<span class="badge text-bg-danger">Error</span> ${err}`;

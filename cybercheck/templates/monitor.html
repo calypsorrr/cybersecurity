@@ -65,6 +65,27 @@
 </div>
 
 <div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div>
+            <h2 class="h5 mb-0">Ingress vs egress</h2>
+            <p class="text-muted small mb-0">Live bytes per second observed across the monitored interface.</p>
+          </div>
+          <span class="badge rounded-pill text-bg-light text-dark">1s buckets</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="bandwidth-chart">
+          <canvas id="bandwidthChart" aria-label="Bandwidth over time" role="img"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
   <div class="col-lg-7">
     <div class="card shadow-sm border-0 h-100">
       <div class="card-header bg-white border-0 pt-4 pb-3">
@@ -206,6 +227,8 @@
     const alertCount = document.getElementById('alertCount');
     const recentCount = document.getElementById('recentCount');
     const alertTemplate = document.getElementById('alertTemplate');
+    const bandwidthChartEl = document.getElementById('bandwidthChart');
+    const bandwidthCtx = bandwidthChartEl ? bandwidthChartEl.getContext('2d') : null;
 
     const metricFields = document.querySelectorAll('[data-field]');
 
@@ -357,6 +380,97 @@
       });
     }
 
+    function drawLine(ctx, data, color, xStart, yScale, step) {
+      if (!data.length) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      data.forEach((value, idx) => {
+        const x = xStart + (idx * step);
+        const y = yScale(value);
+        if (idx === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+    }
+
+    function drawLegend(ctx, label, color, x, y) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y - 10, 14, 4);
+      ctx.fillStyle = '#495057';
+      ctx.font = '12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(label, x + 20, y);
+    }
+
+    function renderBandwidth(history) {
+      if (!bandwidthChartEl || !bandwidthCtx) return;
+      const entries = (history || []).slice(-90);
+      const inbound = entries.map(entry => Math.max(0, Math.round(entry.inbound || 0)));
+      const outbound = entries.map(entry => Math.max(0, Math.round(entry.outbound || 0)));
+      const maxValue = Math.max(1, ...inbound, ...outbound);
+
+      const width = bandwidthChartEl.clientWidth || 600;
+      const height = bandwidthChartEl.clientHeight || 280;
+      bandwidthChartEl.width = width;
+      bandwidthChartEl.height = height;
+      const ctx = bandwidthCtx;
+      ctx.clearRect(0, 0, width, height);
+
+      if (!entries.length) {
+        ctx.fillStyle = '#adb5bd';
+        ctx.font = '14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillText('Waiting for packets…', 16, height / 2);
+        return;
+      }
+
+      const padding = { top: 28, right: 24, bottom: 28, left: 60 };
+      const chartWidth = Math.max(10, width - padding.left - padding.right);
+      const chartHeight = Math.max(10, height - padding.top - padding.bottom);
+      const pointCount = entries.length;
+      const step = pointCount > 1 ? chartWidth / (pointCount - 1) : 0;
+      const yScale = (value) => padding.top + chartHeight - ((value / maxValue) * chartHeight);
+
+      ctx.strokeStyle = '#e9ecef';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.rect(padding.left, padding.top, chartWidth, chartHeight);
+      ctx.stroke();
+
+      ctx.fillStyle = '#6c757d';
+      ctx.font = '12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const ticks = 4;
+      for (let i = 0; i <= ticks; i++) {
+        const ratio = i / ticks;
+        const value = maxValue * (1 - ratio);
+        const y = padding.top + (chartHeight * ratio);
+        ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+        ctx.fillStyle = '#6c757d';
+        ctx.fillText(`${formatBytes(value)}/s`, 4, y + 4);
+      }
+
+      drawLine(ctx, inbound, '#10b981', padding.left, yScale, step);
+      drawLine(ctx, outbound, '#3b82f6', padding.left, yScale, step);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#6c757d';
+      const firstLabel = new Date(entries[0].ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+      const lastLabel = new Date(entries[entries.length - 1].ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+      ctx.fillText(firstLabel, padding.left, height - 6);
+      if (entries.length > 1) {
+        ctx.fillText(lastLabel, padding.left + chartWidth, height - 6);
+      }
+      ctx.textAlign = 'left';
+      drawLegend(ctx, 'Incoming', '#10b981', padding.left, 18);
+      drawLegend(ctx, 'Outgoing', '#3b82f6', padding.left + 140, 18);
+    }
+
     const metricData = {};
 
     function assignValue(path, value) {
@@ -405,6 +519,7 @@
           renderFanOut(snapshot.fan_out);
           renderAlerts(snapshot.alert_log);
           renderRecent(snapshot.recent_packets);
+          renderBandwidth(snapshot.bandwidth_history);
         })
         .catch(err => {
           statusEl.innerHTML = `<span class="badge text-bg-danger">Error</span> ${err}`;

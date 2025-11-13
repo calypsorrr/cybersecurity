@@ -71,7 +71,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
           <div>
             <h2 class="h5 mb-0">Ingress vs egress</h2>
-            <p class="text-muted small mb-0">Live bytes per second observed across the monitored interface.</p>
+            <p class="text-muted small mb-0">Live bytes per second observed across the monitored interface. Unknown traffic is plotted as a dashed fallback line.</p>
           </div>
           <span class="badge rounded-pill text-bg-light text-dark">1s buckets</span>
         </div>
@@ -387,6 +387,7 @@
       const labels = entries.map(entry => new Date(entry.ts * 1000).toLocaleTimeString('en-GB', { hour12: false }));
       const inbound = entries.map(entry => Math.round(entry.inbound || 0));
       const outbound = entries.map(entry => Math.round(entry.outbound || 0));
+      const external = entries.map(entry => Math.round(entry.external || 0));
       const datasets = [
         {
           label: 'Incoming',
@@ -405,6 +406,18 @@
           tension: 0.25,
         },
       ];
+
+      if (external.some(value => value > 0)) {
+        datasets.push({
+          label: 'External / unknown',
+          data: external,
+          fill: false,
+          borderColor: 'rgba(148, 163, 184, 1)',
+          backgroundColor: 'rgba(148, 163, 184, 0.2)',
+          borderDash: [6, 4],
+          tension: 0.25,
+        });
+      }
 
       if (!bandwidthChart) {
         bandwidthChart = new Chart(bandwidthChartEl, {
@@ -437,9 +450,7 @@
         });
       } else {
         bandwidthChart.data.labels = labels;
-        bandwidthChart.data.datasets.forEach((dataset, idx) => {
-          dataset.data = idx === 0 ? inbound : outbound;
-        });
+        bandwidthChart.data.datasets = datasets;
         bandwidthChart.update('none');
       }
     }

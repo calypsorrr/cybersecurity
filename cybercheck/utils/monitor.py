@@ -49,12 +49,30 @@ def _discover_local_ips() -> Set[str]:
 
     ips: Set[str] = {"127.0.0.1"}
 
+    def _add_ip(candidate: Optional[str]) -> None:
+        if not candidate:
+            return
+        if candidate in {"0.0.0.0", "127.0.1.1"}:
+            return
+        if ":" in candidate:  # Skip IPv6 for direction heuristics
+            return
+        ips.add(candidate)
+
     try:
         hostname = socket.gethostname()
+        host_info = socket.gethostbyname_ex(hostname)
+        for addr in host_info[2]:
+            _add_ip(addr)
         for info in socket.getaddrinfo(hostname, None):
-            addr = info[4][0]
-            if ":" not in addr and addr:
-                ips.add(addr)
+            _add_ip(info[4][0])
+    except Exception:
+        pass
+
+    # UDP "connect" does not send traffic but reveals the outbound address.
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            _add_ip(sock.getsockname()[0])
     except Exception:
         pass
 
@@ -63,9 +81,7 @@ def _discover_local_ips() -> Set[str]:
 
         for route in getattr(conf.route, "routes", []):
             if len(route) >= 5:
-                addr = route[4]
-                if addr and addr != "0.0.0.0":
-                    ips.add(addr)
+                _add_ip(route[4])
     except Exception:
         pass
 

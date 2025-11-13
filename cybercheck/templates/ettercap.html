@@ -1,0 +1,357 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<div class="page-header">
+  <div>
+    <h1 class="display-6">Ettercap operations center</h1>
+    <p class="page-subtitle">
+      Launch the same Ettercap playbooks you'd normally run on a Linux terminal — unified sniffing, ARP/ICMP/DHCP MITM
+      and bespoke command strings — without leaving the CyberCheck console.
+    </p>
+  </div>
+  <div class="metric-card">
+    <span class="metric-label">Workflow</span>
+    <span class="metric-value">Text mode (-T) & quiet (-q) by default</span>
+    <span class="metric-subtext">Toggle per form before submitting</span>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-xxl-7 vstack gap-4">
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold d-block">Unified sniffing & log capture</span>
+          <small class="text-muted">Mirrors <code>ettercap -T -q -i iface</code> with optional targets/plugins.</small>
+        </div>
+        <span class="badge text-bg-secondary">Passive</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('run_ettercap_route') }}" class="vstack gap-3" novalidate>
+          <input type="hidden" name="operation" value="sniff">
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffIface">Interface</label>
+              <input id="sniffIface" class="form-control" name="interface" placeholder="eth0" autocomplete="off" required>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffUser">Operator</label>
+              <input id="sniffUser" class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffTargetA">Target A (optional)</label>
+              <input id="sniffTargetA" class="form-control" name="target_a" placeholder="/192.168.1.10/ or //">
+              <div class="form-text">Use <code>//</code> for broadcast. CIDR is supported (<code>/10.0.0.0/24/</code>).</div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffTargetB">Target B (optional)</label>
+              <input id="sniffTargetB" class="form-control" name="target_b" placeholder="/router/ or //">
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffPlugins">Plugins (comma-separated)</label>
+              <input id="sniffPlugins" class="form-control" name="plugin" placeholder="chk_poison,remote_browser">
+              <div class="form-text">Optional <code>-P</code> list. Leave blank to disable.</div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffFilter">Filter script</label>
+              <input id="sniffFilter" class="form-control" name="filter_script" placeholder="/path/to/filter.ef">
+              <div class="form-text">Maps to <code>-F</code> for custom filters.</div>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffLog">Session log prefix</label>
+              <input id="sniffLog" class="form-control" name="log_file" placeholder="/tmp/ettercap-log">
+              <div class="form-text">Adds <code>-L</code> for human-readable logs.</div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="sniffPcap">Packet capture</label>
+              <input id="sniffPcap" class="form-control" name="pcap_file" placeholder="/tmp/capture.pcap">
+              <div class="form-text">Adds <code>-w</code> to dump raw packets.</div>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="sniffExtra">Extra args</label>
+            <input id="sniffExtra" class="form-control" name="extra_args" placeholder="Additional flags (space separated)">
+            <div class="form-text">Appended verbatim after generated arguments.</div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sniffTextMode" name="text_mode" value="1" checked>
+              <label class="form-check-label" for="sniffTextMode">Text UI (-T)</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="sniffQuiet" name="quiet" value="1" checked>
+              <label class="form-check-label" for="sniffQuiet">Quiet mode (-q)</label>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="sniffToken">Engagement token</label>
+            <input id="sniffToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN" autocomplete="off" required>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary">Start sniffing</button>
+            <span class="text-muted small align-self-center">Results and stdout mirror the Linux CLI.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold d-block">Active MITM / poisoning</span>
+          <small class="text-muted">ARP, ICMP or DHCP attacks between two targets with plugin support.</small>
+        </div>
+        <span class="badge text-bg-danger">Intrusive</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('run_ettercap_route') }}" class="vstack gap-3" novalidate>
+          <input type="hidden" name="operation" value="mitm">
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="mitmIface">Interface</label>
+              <input id="mitmIface" class="form-control" name="interface" placeholder="eth0" autocomplete="off" required>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="mitmUser">Operator</label>
+              <input id="mitmUser" class="form-control" name="user" placeholder="Your name or initials">
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="mitmTargetA">Target A</label>
+              <input id="mitmTargetA" class="form-control" name="target_a" placeholder="/victim/" required>
+              <div class="form-text">Example: <code>/192.168.1.50/</code></div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="mitmTargetB">Target B</label>
+              <input id="mitmTargetB" class="form-control" name="target_b" placeholder="/gateway/" required>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="mitmMethod">Attack method</label>
+            <select id="mitmMethod" name="mitm_method" class="form-select">
+              {% for method in mitm_methods %}
+                <option value="{{ method.value }}">{{ method.label }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Maps directly to Ettercap's <code>-M</code> switch.</div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="mitmPlugins">Plugins</label>
+              <input id="mitmPlugins" class="form-control" name="plugin" placeholder="dns_spoof,remote_browser">
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="mitmFilter">Filter script</label>
+              <input id="mitmFilter" class="form-control" name="filter_script" placeholder="/opt/filters/cred.ef">
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="mitmExtra">Extra args</label>
+            <input id="mitmExtra" class="form-control" name="extra_args" placeholder="--gateway 10.0.0.1">
+          </div>
+
+          <div class="d-flex flex-wrap gap-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="mitmTextMode" name="text_mode" value="1" checked>
+              <label class="form-check-label" for="mitmTextMode">Text UI (-T)</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="mitmQuiet" name="quiet" value="1" checked>
+              <label class="form-check-label" for="mitmQuiet">Quiet (-q)</label>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="mitmToken">Engagement token</label>
+            <input id="mitmToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN" autocomplete="off" required>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-danger">Start MITM</button>
+            <span class="text-muted small align-self-center">Identical arguments to the Linux CLI.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold d-block">Remote host discovery sweep</span>
+          <small class="text-muted">Use <code>-M arp:remote</code> against broadcast ranges to map a segment.</small>
+        </div>
+        <span class="badge text-bg-warning text-dark">Active</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('run_ettercap_route') }}" class="vstack gap-3" novalidate>
+          <input type="hidden" name="operation" value="scan">
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="scanIface">Interface</label>
+              <input id="scanIface" class="form-control" name="interface" placeholder="eth1" required>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="scanUser">Operator</label>
+              <input id="scanUser" class="form-control" name="user" placeholder="Your name or initials">
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="scanTargetA">Network or target list</label>
+              <input id="scanTargetA" class="form-control" name="target_a" placeholder="/10.0.5.0/24/" required>
+              <div class="form-text">Everything Ettercap accepts: IP, range, CIDR or host groups.</div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="scanTargetB">Peer (optional)</label>
+              <input id="scanTargetB" class="form-control" name="target_b" placeholder="//">
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="scanExtra">Extra args</label>
+            <input id="scanExtra" class="form-control" name="extra_args" placeholder="--plugin autoadd">
+          </div>
+
+          <div class="d-flex flex-wrap gap-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="scanTextMode" name="text_mode" value="1" checked>
+              <label class="form-check-label" for="scanTextMode">Text UI (-T)</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="scanQuiet" name="quiet" value="1" checked>
+              <label class="form-check-label" for="scanQuiet">Quiet (-q)</label>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="scanToken">Engagement token</label>
+            <input id="scanToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN" autocomplete="off" required>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-warning text-dark">Sweep network</button>
+            <span class="text-muted small align-self-center">Captures host list in stdout for auditing.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold d-block">Custom CLI wrapper</span>
+          <small class="text-muted">Paste any Ettercap arguments for full parity with Linux.</small>
+        </div>
+        <span class="badge text-bg-dark">Power user</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('run_ettercap_route') }}" class="vstack gap-3" novalidate>
+          <input type="hidden" name="operation" value="custom">
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="customIface">Interface</label>
+              <input id="customIface" class="form-control" name="interface" placeholder="eth0" required>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="customUser">Operator</label>
+              <input id="customUser" class="form-control" name="user" placeholder="Your name or initials">
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="customArgs">Raw Ettercap arguments</label>
+            <textarea id="customArgs" class="form-control" rows="3" name="custom_args" placeholder="-T -q -i eth0 -M arp:remote /victim/ /router/" required></textarea>
+            <div class="form-text">Do not include the binary itself — the app prefixes <code>ettercap</code> automatically.</div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="customTextMode" name="text_mode" value="1" checked>
+              <label class="form-check-label" for="customTextMode">Add -T</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" role="switch" id="customQuiet" name="quiet" value="1" checked>
+              <label class="form-check-label" for="customQuiet">Add -q</label>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="customToken">Engagement token</label>
+            <input id="customToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN" autocomplete="off" required>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-secondary">Run custom command</button>
+            <span class="text-muted small align-self-center">Ideal for filters or beta features.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-12 col-xxl-5 vstack gap-4">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">What you can do here</div>
+      <div class="list-group list-group-flush">
+        {% for cap in capabilities %}
+          <div class="list-group-item">
+            <div class="fw-semibold">{{ cap.title }}</div>
+            <div class="small text-muted">{{ cap.body|safe }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Target notation primer</div>
+      <div class="card-body">
+        <ul class="small text-muted mb-0">
+          <li><code>//</code> — entire LAN broadcast.</li>
+          <li><code>/10.10.0.0/24/</code> — CIDR blocks.</li>
+          <li><code>/victim,server/</code> — comma separated host list.</li>
+          <li><code>/A,B,C/</code> + <code>/router/</code> — MITM between many hosts and a gateway.</li>
+          <li>All forms map 1:1 with Ettercap's Linux syntax.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Attack method details</div>
+      <div class="card-body vstack gap-3">
+        {% for method in mitm_methods %}
+          <div>
+            <div class="fw-semibold">{{ method.label }}</div>
+            <div class="small text-muted">{{ method.summary }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

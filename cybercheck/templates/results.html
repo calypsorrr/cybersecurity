@@ -3,6 +3,63 @@
 
 <h2 class="h4 mb-3">{{ title }}</h2>
 
+{# -------------------- Ettercap summary -------------------- #}
+{% if parsed_ettercap %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold">Ettercap summary</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Operation</div>
+          <div class="small text-muted">{{ parsed_ettercap.operation_label }}</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Interface</div>
+          <div class="small text-muted">{{ parsed_ettercap.interface }}</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Targets</div>
+          <div class="small text-muted">
+            A: {{ parsed_ettercap.targets.a }}<br>
+            B: {{ parsed_ettercap.targets.b }}
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Plugins</div>
+          <div class="small text-muted">
+            {% if parsed_ettercap.plugins %}
+              {% for plugin in parsed_ettercap.plugins %}
+                <span class="badge text-bg-secondary">{{ plugin }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Filter</div>
+          <div class="small text-muted">{{ parsed_ettercap.filter_script or '—' }}</div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="fw-semibold">Capture files</div>
+          <div class="small text-muted">
+            Log: {{ parsed_ettercap.log_file or '—' }}<br>
+            PCAP: {{ parsed_ettercap.pcap_file or '—' }}
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <div class="fw-semibold">Command line</div>
+        <code class="small">{{ parsed_ettercap.commandline }}</code>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
 {# -------------------- Bandit parsed view -------------------- #}
 {% if parsed_bandit %}
   <div class="card shadow-sm mb-3">

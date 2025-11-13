@@ -70,6 +70,13 @@
                 <small class="d-block text-muted">When & how to use each tool</small>
               </span>
             </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'ettercap' else '' }}" href="{{ url_for('ettercap_console') }}">
+              <span class="sidebar-icon" aria-hidden="true">🕵️</span>
+              <span>
+                <strong>Ettercap console</strong>
+                <small class="d-block text-muted">Sniffing, MITM & filters</small>
+              </span>
+            </a>
           </nav>
         </div>
       </div>

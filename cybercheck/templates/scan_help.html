@@ -1,0 +1,105 @@
+{% extends 'layout.html' %}
+{% block body %}
+<div class="page-header">
+  <div>
+    <h1>Scan help center</h1>
+    <p class="page-subtitle">Quick reference for the built-in scanners. Learn when to launch Nmap, Nikto, or Scapy, which parameters make sense, and how to reproduce the exact commands locally.</p>
+  </div>
+</div>
+
+<section class="guides-grid">
+  {% for guide in guides %}
+  <article class="guide-card">
+    <header>
+      <h2>{{ guide.name }}</h2>
+      <p class="text-muted mb-2">{{ guide.tagline }}</p>
+      <p>{{ guide.summary }}</p>
+    </header>
+
+    <div class="guide-section">
+      <h3>Most useful parameters</h3>
+      <ul class="list-unstyled guide-flags">
+        {% for flag in guide.common_flags %}
+        <li>
+          <span class="flag">{{ flag.flag }}</span>
+          <span class="flag-meaning">{{ flag.meaning }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>Field-tested examples</h3>
+      <div class="example-stack">
+        {% for example in guide.examples %}
+        <div class="example">
+          <div class="example-title">{{ example.label }}</div>
+          <pre><code>{{ example.cmd }}</code></pre>
+          <p class="text-muted mb-0">{{ example.notes }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+
+<section class="decision-section mt-5">
+  <div class="page-header">
+    <div>
+      <h2>Choosing the right scan</h2>
+      <p class="page-subtitle">Map your task to the tool. If multiple scanners apply, run the least intrusive option first and escalate only as needed.</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th scope="col">Task</th>
+          <th scope="col">Recommended scanner</th>
+          <th scope="col">Why this works</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in decision_matrix %}
+        <tr>
+          <td>{{ row.task }}</td>
+          <td>{{ row.recommended }}</td>
+          <td>{{ row.why }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mt-5">
+  <div class="page-header">
+    <div>
+      <h2>CyberCheck presets ⇄ CLI commands</h2>
+      <p class="page-subtitle">Each preset in the quick-scan form maps directly to an Nmap profile. Use this to reproduce scans outside the UI.</p>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Preset name</th>
+          <th>Description</th>
+          <th>Equivalent CLI</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for name, profile in nmap_profiles.items() %}
+        <tr>
+          <td class="fw-semibold">{{ name }}</td>
+          <td>{{ profile.description }}</td>
+          <td><code>nmap {{ ' '.join(profile.args) }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

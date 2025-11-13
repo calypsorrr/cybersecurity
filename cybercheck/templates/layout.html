@@ -63,6 +63,13 @@
                 <small class="d-block text-muted">Live telemetry & run history</small>
               </span>
             </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'scan_help' else '' }}" href="{{ url_for('scan_help') }}">
+              <span class="sidebar-icon" aria-hidden="true">📘</span>
+              <span>
+                <strong>Scan help center</strong>
+                <small class="d-block text-muted">When & how to use each tool</small>
+              </span>
+            </a>
           </nav>
         </div>
       </div>

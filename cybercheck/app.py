@@ -117,6 +117,137 @@ def index():
     )
 
 
+@app.route("/scan-help")
+def scan_help():
+    scan_guides = [
+        {
+            "name": "Nmap",
+            "tagline": "Network discovery, service fingerprinting & basic vuln probing",
+            "summary": "Use Nmap when you need to map hosts, enumerate ports/services, or verify exposure before and after changes.",
+            "common_flags": [
+                {"flag": "-sS", "meaning": "TCP SYN scan (stealthy, fast default)"},
+                {"flag": "-sV", "meaning": "Probe services to guess versions"},
+                {"flag": "-O", "meaning": "OS fingerprinting (requires root)"},
+                {"flag": "-A", "meaning": "Aggressive scan = -sV -O --traceroute + NSE scripts"},
+                {"flag": "-T4", "meaning": "Faster timing template for reliable networks"},
+                {"flag": "-Pn", "meaning": "Skip host discovery (assume hosts are up)"},
+            ],
+            "examples": [
+                {
+                    "label": "Ping sweep / live host discovery",
+                    "cmd": "nmap -sn 10.0.0.0/24",
+                    "notes": "Use before port scans to understand scope without touching services.",
+                },
+                {
+                    "label": "Top ports & service info",
+                    "cmd": "nmap -sS -sV --top-ports 100 192.168.1.50",
+                    "notes": "Quick visibility into the most exposed services on a host.",
+                },
+                {
+                    "label": "Full TCP/UDP audit",
+                    "cmd": "sudo nmap -p- -sS -sU -O -sV 10.20.30.40",
+                    "notes": "Thorough reachability check before/after hardening; slower but comprehensive.",
+                },
+            ],
+        },
+        {
+            "name": "Nikto",
+            "tagline": "Web server misconfiguration & vulnerability sweeps",
+            "summary": "Run Nikto when validating HTTP/S attack surface: outdated servers, dangerous files, SSL issues, and known CVEs.",
+            "common_flags": [
+                {"flag": "-h", "meaning": "Target host, IP, or URL"},
+                {"flag": "-p", "meaning": "Port list (e.g. 80,443,8080)"},
+                {"flag": "-ssl", "meaning": "Force SSL if auto-detect fails"},
+                {"flag": "-Tuning", "meaning": "Select test families (0=File, 4=Injection, 9=Misc)"},
+                {"flag": "-Plugins", "meaning": "Enable/disable specific plugin modules"},
+                {"flag": "-output", "meaning": "Write findings to file (JSON, CSV, HTML)"},
+            ],
+            "examples": [
+                {
+                    "label": "Standard HTTPS assessment",
+                    "cmd": "nikto -h https://app.internal.example",
+                    "notes": "Covers 6k+ checks, SSL configuration, dangerous files, default creds.",
+                },
+                {
+                    "label": "Multiple ports + tuning",
+                    "cmd": "nikto -h 10.1.5.15 -p 80,8080 -Tuning x 9",
+                    "notes": "Focus on XSS + misc tests when triaging web proxy clusters.",
+                },
+                {
+                    "label": "Report for ticket attachment",
+                    "cmd": "nikto -h https://prod.example -output prod-nikto.json",
+                    "notes": "Generates JSON for ingestion or compliance evidence.",
+                },
+            ],
+        },
+        {
+            "name": "Scapy",
+            "tagline": "Packet crafting for validation, troubleshooting & custom probes",
+            "summary": "Use Scapy when you need programmable packets: crafting probes, validating firewall rules, or building custom detections.",
+            "common_flags": [
+                {"flag": "sr()", "meaning": "Send packets & receive replies (layer 3)"},
+                {"flag": "srp()", "meaning": "Layer-2 send/receive (ARP, etc.)"},
+                {"flag": "sniff()", "meaning": "Capture packets that match filters"},
+                {"flag": "ls(Proto)", "meaning": "List fields of protocol layers"},
+                {"flag": "sendpfast", "meaning": "High-speed packet replay"},
+            ],
+            "examples": [
+                {
+                    "label": "ARP sweep (like discovery)",
+                    "cmd": "srp(Ether(dst='ff:ff:ff:ff:ff:ff')/ARP(pdst='10.10.0.0/24'), timeout=2)",
+                    "notes": "Confirms which hosts respond on the L2 segment when ICMP is blocked.",
+                },
+                {
+                    "label": "Custom TCP SYN with flags",
+                    "cmd": "sr(IP(dst='192.168.1.10')/TCP(dport=[22,443], flags='S'))",
+                    "notes": "Validate firewall handling of unusual flag combos or rate limits.",
+                },
+                {
+                    "label": "Packet capture with BPF filter",
+                    "cmd": "sniff(filter='tcp port 443', count=50)",
+                    "notes": "Troubleshoot TLS handshakes without launching full tcpdump.",
+                },
+            ],
+        },
+    ]
+
+    decision_matrix = [
+        {
+            "task": "Map unknown network segment / baseline services",
+            "recommended": "Nmap (start with -sn to find hosts, escalate to -sS -sV for services)",
+            "why": "Fast discovery + automated service fingerprinting across many hosts.",
+        },
+        {
+            "task": "Validate web server hardening / find exposed files",
+            "recommended": "Nikto (-h target -ssl -Tuning 0 4 9)",
+            "why": "Purpose-built HTTP checklist catches outdated software and dangerous URIs.",
+        },
+        {
+            "task": "Test firewall rules or reproduce IDS alerts with crafted packets",
+            "recommended": "Scapy (sr/srp/sendp) with custom layers",
+            "why": "Lets you build packets by hand and observe responses in real time.",
+        },
+        {
+            "task": "Continuous ping/port monitoring for outages",
+            "recommended": "Use built-in Scapy ping preset in CyberCheck",
+            "why": "Lightweight and scriptable; integrate with dashboards.",
+        },
+        {
+            "task": "Service validation after remediation",
+            "recommended": "Re-run the same Nmap profile + Nikto (if web) to compare diffs",
+            "why": "Deterministic scans provide evidence that findings were addressed.",
+        },
+    ]
+
+    return render_template(
+        "scan_help.html",
+        active_page="scan_help",
+        guides=scan_guides,
+        decision_matrix=decision_matrix,
+        nmap_profiles=NMAP_PROFILES,
+    )
+
+
 @app.route("/run_non_intrusive", methods=["POST"])
 def run_non_intrusive():
     tool = (request.form.get("tool") or "").strip()

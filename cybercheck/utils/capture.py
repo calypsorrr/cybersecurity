@@ -202,12 +202,9 @@ def _summarize_packets(
             "proto": proto,
             "length": length,
             "info": summary,
-            "frame_no": captured,
         }
         if include_hex:
             sample_entry["hex"] = hexdump_fn(packet, dump=True)
-
-        sample_entry["layers"] = _layer_details(packet, captured)
 
         all_samples.append(sample_entry)
 

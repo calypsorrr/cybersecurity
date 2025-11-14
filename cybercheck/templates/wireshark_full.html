@@ -128,28 +128,6 @@
                 <td>{{ pkt.length }}</td>
                 <td>
                   <small class="text-muted d-block">{{ pkt.info }}</small>
-                  {% if pkt.layers %}
-                    <details class="mt-1">
-                      <summary class="small">Protocol stack</summary>
-                      <div class="mt-2 ms-2 protocol-tree">
-                        {% for layer in pkt.layers %}
-                          <details class="mb-2">
-                            <summary class="fw-semibold small">{{ layer.label|e }}</summary>
-                            {% if layer.fields %}
-                              <dl class="row row-cols-1 row-cols-sm-2 g-1 small mb-0 mt-1">
-                                {% for field in layer.fields %}
-                                  <dt class="col text-muted">{{ field.name|e }}</dt>
-                                  <dd class="col font-monospace">{{ field.value|e }}</dd>
-                                {% endfor %}
-                              </dl>
-                            {% else %}
-                              <div class="text-muted small fst-italic">No decoded fields.</div>
-                            {% endif %}
-                          </details>
-                        {% endfor %}
-                      </div>
-                    </details>
-                  {% endif %}
                   {% if pkt.hex %}
                     <details class="mt-1">
                       <summary class="small">Hex dump</summary>

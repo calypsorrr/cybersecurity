@@ -61,7 +61,7 @@ body {
 
 .sidebar-inner {
   position: sticky;
-  top: 75px; /* navbar is sticky but in flow; 0 works on desktop */
+  top: 40px; /* navbar is sticky but in flow; 0 works on desktop */
   display: flex;
   flex-direction: column;
   gap: 2.5rem;

@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - Py<3.11 fallback
 
 from cybercheck.models.db import log_run
 
+
 def _format_counter(counter: Counter, limit: int = 5) -> List[Dict[str, Any]]:
     return [
         {"label": label, "count": int(count)}
@@ -40,8 +41,15 @@ def _summarize_packets(
 ) -> Dict[str, Any]:
     """Return aggregate stats and sample rows from a packet iterable."""
 
-    from scapy.layers.inet import ICMP, IP, IPv6, TCP, UDP  # type: ignore
+    from scapy.layers.inet import ICMP, IP, TCP, UDP  # type: ignore
     from scapy.layers.l2 import ARP, Ether  # type: ignore
+
+    # IPv6 is in inet6 for many Scapy versions; fall back gracefully if unavailable
+    try:  # pragma: no cover - optional IPv6 layer
+        from scapy.layers.inet6 import IPv6  # type: ignore
+    except Exception:  # pragma: no cover - IPv6 layer unavailable
+        IPv6 = None  # type: ignore
+
     try:  # pragma: no cover - optional dependency
         from scapy.layers.dns import DNS  # type: ignore
     except Exception:  # pragma: no cover - DNS layer unavailable
@@ -72,7 +80,7 @@ def _summarize_packets(
             return "ICMP"
         if pkt.haslayer(ARP):
             return "ARP"
-        if pkt.haslayer(IPv6):
+        if IPv6 and pkt.haslayer(IPv6):
             return "IPv6"
         if pkt.haslayer(IP):
             return "IP"
@@ -97,7 +105,7 @@ def _summarize_packets(
         if packet.haslayer(IP):
             src = packet[IP].src
             dst = packet[IP].dst
-        elif packet.haslayer(IPv6):
+        elif IPv6 and packet.haslayer(IPv6):
             src = packet[IPv6].src
             dst = packet[IPv6].dst
         elif packet.haslayer(ARP):
@@ -123,7 +131,9 @@ def _summarize_packets(
             ports[f"{proto}:{dst_port}"] += 1
 
         summary = packet.summary()
-        stdout_lines.append(f"{timestamp.isoformat()} {src or '?'} -> {dst or '?'} {summary}")
+        stdout_lines.append(
+            f"{timestamp.isoformat()} {src or '?'} -> {dst or '?'} {summary}"
+        )
 
         if len(samples) < sample_limit:
             sample_entry = {
@@ -306,7 +316,9 @@ def analyze_pcap_file(
         if earliest is not None and latest is not None and latest >= earliest:
             duration_window = float(latest - earliest)
 
-        bandwidth_bps = int((stats["total_bytes"] * 8) / duration_window) if duration_window > 0 else 0
+        bandwidth_bps = int(
+            (stats["total_bytes"] * 8) / duration_window
+        ) if duration_window > 0 else 0
 
         label = original_name or file_path.name or "uploaded.pcap"
 

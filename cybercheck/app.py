@@ -19,6 +19,8 @@ from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.capture import analyze_pcap_file
+from cybercheck.utils.background_sniffer import background_sniffer
+from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 
 try:
     from datetime import UTC
@@ -31,6 +33,18 @@ BASE_DIR = Path(__file__).resolve().parent
 
 WIRESHARK_CACHE_LIMIT = 6
 WIRESHARK_RUN_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+
+
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if not text:
+        return False
+    return text in {"1", "true", "yes", "on"}
+
 
 ETTERCAP_MITM_METHODS = [
     {
@@ -438,7 +452,7 @@ def run_ettercap_route():
     plugin = (request.form.get("plugin") or "").strip() or None
     filter_script = (request.form.get("filter_script") or "").strip() or None
     log_file = (request.form.get("log_file") or "").strip() or None
-    pcap_file = (request.form.get("pcap_file") or "").strip() or None
+    pcap_file_input = (request.form.get("pcap_file") or "").strip() or None
     target_a = (request.form.get("target_a") or "").strip() or None
     target_b = (request.form.get("target_b") or "").strip() or None
     mitm_method = (request.form.get("mitm_method") or "").strip() or None
@@ -475,6 +489,13 @@ def run_ettercap_route():
         except ValueError:
             flash("Unable to parse custom Ettercap arguments.", "danger")
             return redirect(url_for("ettercap_console"))
+
+    if pcap_file_input:
+        pcap_file = resolve_pcap_output_path(user, pcap_file_input)
+    elif operation == "sniff":
+        pcap_file = resolve_pcap_output_path(user, None)
+    else:
+        pcap_file = None
 
     try:
         res = run_ettercap(
@@ -514,6 +535,79 @@ def run_ettercap_route():
         title=title,
         active_page="ettercap",
     )
+
+
+@app.route("/api/ettercap/sniff/status")
+def ettercap_sniff_status():
+    return jsonify(background_sniffer.status())
+
+
+@app.route("/api/ettercap/sniff/start", methods=["POST"])
+def ettercap_sniff_start():
+    payload = request.get_json(silent=True) or {}
+    token = payload.get("engagement_token")
+    if not require_active_session(token or ""):
+        return jsonify({"running": False, "error": "Invalid or missing engagement token."}), 400
+
+    interface = (payload.get("interface") or "").strip()
+    if not interface:
+        return jsonify({"running": False, "error": "Interface is required."}), 400
+
+    user = (payload.get("user") or "operator").strip() or "operator"
+    quiet = _coerce_bool(payload.get("quiet"), default=True)
+    text_mode = _coerce_bool(payload.get("text_mode"), default=True)
+    plugin = (payload.get("plugin") or "").strip() or None
+    filter_script = (payload.get("filter_script") or "").strip() or None
+    log_file = (payload.get("log_file") or "").strip() or None
+    target_a = (payload.get("target_a") or "").strip() or None
+    target_b = (payload.get("target_b") or "").strip() or None
+    extra_args_raw = (payload.get("extra_args") or "").strip()
+
+    extra_args = None
+    if extra_args_raw:
+        try:
+            extra_args = shlex.split(extra_args_raw)
+        except ValueError:
+            return jsonify({"running": False, "error": "Unable to parse extra arguments."}), 400
+
+    pcap_file_input = (payload.get("pcap_file") or "").strip() or None
+    if pcap_file_input:
+        pcap_file = resolve_pcap_output_path(user, pcap_file_input)
+    else:
+        pcap_file = resolve_pcap_output_path(user, None)
+
+    try:
+        result = background_sniffer.start(
+            user=user,
+            interface=interface,
+            quiet=quiet,
+            text_mode=text_mode,
+            target_a=target_a,
+            target_b=target_b,
+            plugin=plugin,
+            filter_script=filter_script,
+            log_file=log_file,
+            pcap_file=pcap_file,
+            extra_args=extra_args,
+        )
+    except RuntimeError as exc:
+        return jsonify({"running": False, "error": str(exc)}), 400
+    except ValueError as exc:
+        return jsonify({"running": False, "error": str(exc)}), 400
+
+    return jsonify(result)
+
+
+@app.route("/api/ettercap/sniff/stop", methods=["POST"])
+def ettercap_sniff_stop():
+    payload = request.get_json(silent=True) or {}
+    token = payload.get("engagement_token")
+    if not require_active_session(token or ""):
+        return jsonify({"running": False, "error": "Invalid or missing engagement token."}), 400
+
+    result = background_sniffer.stop()
+    result.setdefault("running", False)
+    return jsonify(result)
 
 
 @app.route("/run_non_intrusive", methods=["POST"])

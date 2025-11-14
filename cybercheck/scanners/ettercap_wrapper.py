@@ -68,7 +68,7 @@ def _build_summary(
     }
 
 
-def run_ettercap(
+def build_ettercap_command(
     *,
     user: str,
     interface: str,
@@ -84,7 +84,7 @@ def run_ettercap(
     pcap_file: str | None = None,
     extra_args: Sequence[str] | None = None,
     custom_args: Sequence[str] | None = None,
-) -> Dict[str, object]:
+) -> tuple[list[str], Dict[str, object], str]:
     plugins = _sanitize_plugin(plugin)
 
     args: List[str] = []
@@ -127,8 +127,6 @@ def run_ettercap(
         args.extend(extra_args)
 
     target_display = " ".join(filter(None, [target_a, target_b])).strip() or interface or "ettercap"
-    result = run_tool(user=user, tool="ettercap", target=target_display, args=args)
-
     summary = _build_summary(
         operation=operation,
         interface=interface or "(unspecified)",
@@ -141,6 +139,44 @@ def run_ettercap(
         pcap_file=pcap_file,
         extra_args=extra_args,
     )
+    return args, summary, target_display
+
+
+def run_ettercap(
+    *,
+    user: str,
+    interface: str,
+    operation: str,
+    quiet: bool = True,
+    text_mode: bool = True,
+    target_a: str | None = None,
+    target_b: str | None = None,
+    mitm_method: str | None = None,
+    plugin: str | None = None,
+    filter_script: str | None = None,
+    log_file: str | None = None,
+    pcap_file: str | None = None,
+    extra_args: Sequence[str] | None = None,
+    custom_args: Sequence[str] | None = None,
+) -> Dict[str, object]:
+    args, summary, target_display = build_ettercap_command(
+        user=user,
+        interface=interface,
+        operation=operation,
+        quiet=quiet,
+        text_mode=text_mode,
+        target_a=target_a,
+        target_b=target_b,
+        mitm_method=mitm_method,
+        plugin=plugin,
+        filter_script=filter_script,
+        log_file=log_file,
+        pcap_file=pcap_file,
+        extra_args=extra_args,
+        custom_args=custom_args,
+    )
+
+    result = run_tool(user=user, tool="ettercap", target=target_display, args=args)
     result["ettercap_summary"] = summary
     result["command_args"] = args
     return result

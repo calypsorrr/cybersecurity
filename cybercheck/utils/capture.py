@@ -37,7 +37,7 @@ def _summarize_packets(
     include_hex: bool,
     hexdump_fn,
     default_timestamp: float,
-    sample_limit: int = 60,
+    sample_limit: Optional[int] = 60,
 ) -> Dict[str, Any]:
     """Return aggregate stats and sample rows from a packet iterable."""
 
@@ -62,6 +62,7 @@ def _summarize_packets(
     pairs: Counter[Tuple[Optional[str], Optional[str]]] = Counter()
 
     samples: List[Dict[str, Any]] = []
+    all_samples: List[Dict[str, Any]] = []
     stdout_lines: List[str] = []
 
     total_bytes = 0
@@ -135,17 +136,20 @@ def _summarize_packets(
             f"{timestamp.isoformat()} {src or '?'} -> {dst or '?'} {summary}"
         )
 
-        if len(samples) < sample_limit:
-            sample_entry = {
-                "timestamp": timestamp.isoformat(timespec="seconds"),
-                "src": src or "?",
-                "dst": dst or "?",
-                "proto": proto,
-                "length": length,
-                "info": summary,
-            }
-            if include_hex:
-                sample_entry["hex"] = hexdump_fn(packet, dump=True)
+        sample_entry = {
+            "timestamp": timestamp.isoformat(timespec="seconds"),
+            "src": src or "?",
+            "dst": dst or "?",
+            "proto": proto,
+            "length": length,
+            "info": summary,
+        }
+        if include_hex:
+            sample_entry["hex"] = hexdump_fn(packet, dump=True)
+
+        all_samples.append(sample_entry)
+
+        if sample_limit is None or len(samples) < sample_limit:
             samples.append(sample_entry)
 
     return {
@@ -157,6 +161,7 @@ def _summarize_packets(
         "ports": _format_counter(ports, limit=6),
         "pairs": _pair_counter(pairs, limit=6),
         "samples": samples,
+        "all_samples": all_samples,
         "stdout_lines": stdout_lines,
         "earliest_ts": earliest_ts,
         "latest_ts": latest_ts,
@@ -232,6 +237,7 @@ def capture_packets(
             "ports": stats["ports"],
             "pairs": stats["pairs"],
             "samples": stats["samples"],
+            "all_samples": stats["all_samples"],
         }
 
         if not stats["captured"]:
@@ -339,6 +345,7 @@ def analyze_pcap_file(
             "ports": stats["ports"],
             "pairs": stats["pairs"],
             "samples": stats["samples"],
+            "all_samples": stats["all_samples"],
         }
 
         if not stats["captured"]:

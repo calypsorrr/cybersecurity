@@ -37,12 +37,13 @@ def _summarize_packets(
     include_hex: bool,
     hexdump_fn,
     default_timestamp: float,
-    sample_limit: int = 60,
+    sample_limit: Optional[int] = 60,
 ) -> Dict[str, Any]:
     """Return aggregate stats and sample rows from a packet iterable."""
 
     from scapy.layers.inet import ICMP, IP, TCP, UDP  # type: ignore
     from scapy.layers.l2 import ARP, Ether  # type: ignore
+    from scapy.packet import NoPayload, Packet  # type: ignore
 
     # IPv6 is in inet6 for many Scapy versions; fall back gracefully if unavailable
     try:  # pragma: no cover - optional IPv6 layer
@@ -55,6 +56,12 @@ def _summarize_packets(
     except Exception:  # pragma: no cover - DNS layer unavailable
         DNS = None  # type: ignore
 
+    # Import HTTP dissectors if available so Scapy registers them for parsing
+    try:  # pragma: no cover - optional dependency
+        from scapy.layers.http import HTTP, HTTPRequest, HTTPResponse  # type: ignore
+    except Exception:  # pragma: no cover - HTTP layer unavailable
+        HTTP = HTTPRequest = HTTPResponse = None  # type: ignore
+
     proto_counter: Counter[str] = Counter()
     talkers: Counter[str] = Counter()
     targets: Counter[str] = Counter()
@@ -62,6 +69,7 @@ def _summarize_packets(
     pairs: Counter[Tuple[Optional[str], Optional[str]]] = Counter()
 
     samples: List[Dict[str, Any]] = []
+    all_samples: List[Dict[str, Any]] = []
     stdout_lines: List[str] = []
 
     total_bytes = 0
@@ -70,6 +78,12 @@ def _summarize_packets(
     latest_ts: Optional[float] = None
 
     def _proto_label(pkt) -> str:
+        if HTTPRequest and pkt.haslayer(HTTPRequest):  # type: ignore[attr-defined]
+            return "HTTP"
+        if HTTPResponse and pkt.haslayer(HTTPResponse):  # type: ignore[attr-defined]
+            return "HTTP"
+        if HTTP and pkt.haslayer(HTTP):  # type: ignore[attr-defined]
+            return "HTTP"
         if DNS and pkt.haslayer(DNS):  # type: ignore[attr-defined]
             return "DNS"
         if pkt.haslayer(TCP):
@@ -87,6 +101,52 @@ def _summarize_packets(
         if pkt.haslayer(Ether):
             return "Ethernet"
         return getattr(pkt.lastlayer(), "name", pkt.__class__.__name__)
+
+    def _stringify_value(value: Any) -> str:
+        if isinstance(value, bytes):
+            if not value:
+                return "(empty)"
+            snippet = value[:64]
+            hexed = snippet.hex()
+            suffix = "…" if len(value) > len(snippet) else ""
+            return f"0x{hexed}{suffix} ({len(value)} bytes)"
+        if isinstance(value, Packet):
+            return value.summary()
+        if isinstance(value, (list, tuple)):
+            return ", ".join(_stringify_value(item) for item in value)
+        return str(value)
+
+    def _layer_details(packet_obj: Packet, frame_no: int) -> List[Dict[str, Any]]:
+        details: List[Dict[str, Any]] = []
+        # First entry mimics Wireshark's frame summary
+        details.append(
+            {
+                "label": f"Frame {frame_no}",
+                "fields": [
+                    {"name": "Captured length", "value": f"{len(packet_obj)} bytes"},
+                    {"name": "Protocols", "value": "/".join(packet_obj.command().split("/"))},
+                ],
+            }
+        )
+
+        current = packet_obj
+        visited: set[int] = set()
+        while current and not isinstance(current, NoPayload):
+            label = getattr(current, "name", current.__class__.__name__)
+            fields = []
+            for key, value in getattr(current, "fields", {}).items():
+                fields.append({"name": key, "value": _stringify_value(value)})
+            details.append({"label": label, "fields": fields})
+
+            payload = getattr(current, "payload", None)
+            if not payload or isinstance(payload, NoPayload):
+                break
+            if id(payload) in visited:
+                break
+            visited.add(id(payload))
+            current = payload
+
+        return details
 
     for packet in packets:
         captured += 1
@@ -135,17 +195,23 @@ def _summarize_packets(
             f"{timestamp.isoformat()} {src or '?'} -> {dst or '?'} {summary}"
         )
 
-        if len(samples) < sample_limit:
-            sample_entry = {
-                "timestamp": timestamp.isoformat(timespec="seconds"),
-                "src": src or "?",
-                "dst": dst or "?",
-                "proto": proto,
-                "length": length,
-                "info": summary,
-            }
-            if include_hex:
-                sample_entry["hex"] = hexdump_fn(packet, dump=True)
+        sample_entry = {
+            "timestamp": timestamp.isoformat(timespec="seconds"),
+            "src": src or "?",
+            "dst": dst or "?",
+            "proto": proto,
+            "length": length,
+            "info": summary,
+            "frame_no": captured,
+        }
+        if include_hex:
+            sample_entry["hex"] = hexdump_fn(packet, dump=True)
+
+        sample_entry["layers"] = _layer_details(packet, captured)
+
+        all_samples.append(sample_entry)
+
+        if sample_limit is None or len(samples) < sample_limit:
             samples.append(sample_entry)
 
     return {
@@ -157,6 +223,7 @@ def _summarize_packets(
         "ports": _format_counter(ports, limit=6),
         "pairs": _pair_counter(pairs, limit=6),
         "samples": samples,
+        "all_samples": all_samples,
         "stdout_lines": stdout_lines,
         "earliest_ts": earliest_ts,
         "latest_ts": latest_ts,
@@ -232,6 +299,7 @@ def capture_packets(
             "ports": stats["ports"],
             "pairs": stats["pairs"],
             "samples": stats["samples"],
+            "all_samples": stats["all_samples"],
         }
 
         if not stats["captured"]:
@@ -339,6 +407,7 @@ def analyze_pcap_file(
             "ports": stats["ports"],
             "pairs": stats["pairs"],
             "samples": stats["samples"],
+            "all_samples": stats["all_samples"],
         }
 
         if not stats["captured"]:

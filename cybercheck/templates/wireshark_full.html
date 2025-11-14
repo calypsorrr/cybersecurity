@@ -1,0 +1,162 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <p class="text-uppercase text-muted small mb-1">Packet intelligence</p>
+    <h1 class="h3 mb-2">Full PCAP view</h1>
+    <p class="text-muted mb-0">
+      Showing {{ samples|length }} packet{{ 's' if samples|length != 1 else '' }} captured from
+      {{ summary.source_label or 'uploaded file' }}.
+    </p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('wireshark_console') }}">← Back to uploader</a>
+  </div>
+</div>
+
+{% if report %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="d-flex flex-wrap gap-4 align-items-center mb-4">
+        <div>
+          <p class="text-uppercase text-muted small mb-1">Packets analyzed</p>
+          <div class="display-6 fw-semibold">{{ summary.captured }}</div>
+        </div>
+        <div>
+          <p class="text-uppercase text-muted small mb-1">Data volume</p>
+          <div class="h4 mb-0">{{ (summary.bytes / 1024)|round(1) }} KB</div>
+        </div>
+        <div>
+          <p class="text-uppercase text-muted small mb-1">Bandwidth</p>
+          <div class="h4 mb-0">{{ summary.bandwidth_bps }} bps</div>
+        </div>
+        <div>
+          <p class="text-uppercase text-muted small mb-1">Window</p>
+          <div class="h4 mb-0">{{ summary.duration|round(2) }}s</div>
+        </div>
+        <div>
+          <p class="text-uppercase text-muted small mb-1">Source</p>
+          <div class="h4 mb-0">{{ summary.source_label }}</div>
+          <small class="text-muted">{{ summary.filter }}</small>
+        </div>
+      </div>
+      <div class="row g-4">
+        <div class="col-md-4">
+          <h3 class="h6 text-muted text-uppercase">Protocols</h3>
+          <ul class="list-unstyled mb-0">
+            {% for entry in report.protocols %}
+              <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+            {% else %}
+              <li class="text-muted">No traffic observed.</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h3 class="h6 text-muted text-uppercase">Top talkers</h3>
+          <ul class="list-unstyled mb-0">
+            {% for entry in report.talkers %}
+              <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+            {% else %}
+              <li class="text-muted">No data</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h3 class="h6 text-muted text-uppercase">Top targets</h3>
+          <ul class="list-unstyled mb-0">
+            {% for entry in report.targets %}
+              <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+            {% else %}
+              <li class="text-muted">No data</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      <div class="row g-4 mt-1">
+        <div class="col-md-6">
+          <h3 class="h6 text-muted text-uppercase">Ports</h3>
+          <ul class="list-unstyled mb-0">
+            {% for entry in report.ports %}
+              <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+            {% else %}
+              <li class="text-muted">No ports recorded.</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="col-md-6">
+          <h3 class="h6 text-muted text-uppercase">Flows</h3>
+          <ul class="list-unstyled mb-0">
+            {% for pair in report.pairs %}
+              <li>
+                <div class="small text-muted">{{ pair.src }} → {{ pair.dst }}</div>
+                <div class="fw-semibold">{{ pair.count }} packets</div>
+              </li>
+            {% else %}
+              <li class="text-muted">No flows available.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">All packets</h2>
+        <span class="badge text-bg-secondary">{{ samples|length }} rows</span>
+      </div>
+      <div class="table-responsive" style="max-height: 65vh;">
+        <table class="table table-sm align-middle table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th scope="col">Time</th>
+              <th scope="col">Source</th>
+              <th scope="col">Destination</th>
+              <th scope="col">Proto</th>
+              <th scope="col">Len</th>
+              <th scope="col">Info</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pkt in samples %}
+              <tr>
+                <td class="text-nowrap">{{ pkt.timestamp }}</td>
+                <td class="font-monospace">{{ pkt.src }}</td>
+                <td class="font-monospace">{{ pkt.dst }}</td>
+                <td>{{ pkt.proto }}</td>
+                <td>{{ pkt.length }}</td>
+                <td>
+                  <small class="text-muted d-block">{{ pkt.info }}</small>
+                  {% if pkt.hex %}
+                    <details class="mt-1">
+                      <summary class="small">Hex dump</summary>
+                      <pre class="result-pre small mb-0">{{ pkt.hex }}</pre>
+                    </details>
+                  {% endif %}
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="6" class="text-muted">No packets captured.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <h2 class="h6 text-uppercase text-muted">Raw transcript</h2>
+      <pre class="result-pre small mb-0">{{ analysis.stdout or 'No stdout logged.' }}</pre>
+      {% if analysis.stderr %}
+        <div class="alert alert-danger small mt-3 mb-0">{{ analysis.stderr }}</div>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-warning">Capture report missing. Please re-upload the file.</div>
+{% endif %}
+{% endblock %}

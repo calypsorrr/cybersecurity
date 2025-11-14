@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, OrderedDict
+import secrets
 import shlex
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from tempfile import NamedTemporaryFile
@@ -27,6 +28,9 @@ except ImportError:  # pragma: no cover - Python <3.11 fallback
     UTC = _tz.utc
 
 BASE_DIR = Path(__file__).resolve().parent
+
+WIRESHARK_CACHE_LIMIT = 6
+WIRESHARK_RUN_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
 
 ETTERCAP_MITM_METHODS = [
     {
@@ -76,6 +80,22 @@ app = Flask(
     static_folder=str(BASE_DIR / "static"),
 )
 app.secret_key = SECRET_KEY
+
+
+def _remember_wireshark_analysis(analysis: Dict[str, Any]) -> str:
+    """Store Wireshark results temporarily so they can be rendered elsewhere."""
+
+    run_id = secrets.token_urlsafe(8)
+    WIRESHARK_RUN_CACHE[run_id] = analysis
+
+    while len(WIRESHARK_RUN_CACHE) > WIRESHARK_CACHE_LIMIT:
+        WIRESHARK_RUN_CACHE.popitem(last=False)
+
+    return run_id
+
+
+def _get_wireshark_analysis(run_id: str) -> Optional[Dict[str, Any]]:
+    return WIRESHARK_RUN_CACHE.get(run_id)
 
 
 # ---------- Build preset list of project targets (for the dropdown) ----------
@@ -341,6 +361,11 @@ def wireshark_analyze():
         if temp_path and temp_path.exists():
             temp_path.unlink(missing_ok=True)
 
+    run_id: Optional[str] = None
+    if analysis.get("report"):
+        run_id = _remember_wireshark_analysis(analysis)
+        analysis["run_id"] = run_id
+
     returncode = analysis.get("returncode", 0)
     summary = (analysis.get("report") or {}).get("summary") or {}
     packet_count = summary.get("captured", 0)
@@ -364,6 +389,27 @@ def wireshark_analyze():
         active_page="wireshark",
         form_state=form_state,
         analysis=analysis,
+    )
+
+
+@app.route("/wireshark/full/<run_id>")
+def wireshark_full(run_id: str):
+    analysis = _get_wireshark_analysis(run_id)
+    if not analysis:
+        flash("That capture report has expired. Re-upload the PCAP to view it again.", "warning")
+        return redirect(url_for("wireshark_console"))
+
+    report = analysis.get("report") or {}
+    summary = report.get("summary") or {}
+    samples = report.get("all_samples") or []
+
+    return render_template(
+        "wireshark_full.html",
+        active_page="wireshark",
+        analysis=analysis,
+        report=report,
+        summary=summary,
+        samples=samples,
     )
 
 

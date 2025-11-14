@@ -137,6 +137,9 @@
       function enableButtons() { document.querySelectorAll('form button').forEach(b => b.disabled = false); }
 
       document.querySelectorAll('form').forEach(f => {
+        if (f.dataset.noOverlay === 'true' || f.hasAttribute('data-no-overlay')) {
+          return;
+        }
         f.addEventListener('submit', () => { overlay.style.display = 'flex'; disableButtons(); });
       });
 

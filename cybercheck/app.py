@@ -19,7 +19,7 @@ from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.capture import analyze_pcap_file
-from cybercheck.utils.background_sniffer import background_sniffer, background_mitm
+from cybercheck.utils.background_sniffer import background_sniffer
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 
 try:
@@ -606,83 +606,6 @@ def ettercap_sniff_stop():
         return jsonify({"running": False, "error": "Invalid or missing engagement token."}), 400
 
     result = background_sniffer.stop()
-    result.setdefault("running", False)
-    return jsonify(result)
-
-
-@app.route("/api/ettercap/mitm/status")
-def ettercap_mitm_status():
-    return jsonify(background_mitm.status())
-
-
-@app.route("/api/ettercap/mitm/start", methods=["POST"])
-def ettercap_mitm_start():
-    payload = request.get_json(silent=True) or {}
-    token = payload.get("engagement_token")
-    if not require_active_session(token or ""):
-        return jsonify({"running": False, "error": "Invalid or missing engagement token."}), 400
-
-    interface = (payload.get("interface") or "").strip()
-    target_a = (payload.get("target_a") or "").strip()
-    target_b = (payload.get("target_b") or "").strip()
-    if not interface:
-        return jsonify({"running": False, "error": "Interface is required."}), 400
-    if not target_a or not target_b:
-        return jsonify({"running": False, "error": "Target A and Target B are required."}), 400
-
-    user = (payload.get("user") or "operator").strip() or "operator"
-    quiet = _coerce_bool(payload.get("quiet"), default=True)
-    text_mode = _coerce_bool(payload.get("text_mode"), default=True)
-    plugin = (payload.get("plugin") or "").strip() or None
-    filter_script = (payload.get("filter_script") or "").strip() or None
-    log_file = (payload.get("log_file") or "").strip() or None
-    mitm_method = (payload.get("mitm_method") or "arp").strip() or "arp"
-    extra_args_raw = (payload.get("extra_args") or "").strip()
-
-    extra_args = None
-    if extra_args_raw:
-        try:
-            extra_args = shlex.split(extra_args_raw)
-        except ValueError:
-            return jsonify({"running": False, "error": "Unable to parse extra arguments."}), 400
-
-    pcap_file_input = (payload.get("pcap_file") or "").strip() or None
-    if pcap_file_input:
-        pcap_file = resolve_pcap_output_path(user, pcap_file_input)
-    else:
-        pcap_file = None
-
-    try:
-        result = background_mitm.start(
-            user=user,
-            interface=interface,
-            mitm_method=mitm_method,
-            quiet=quiet,
-            text_mode=text_mode,
-            target_a=target_a,
-            target_b=target_b,
-            plugin=plugin,
-            filter_script=filter_script,
-            log_file=log_file,
-            pcap_file=pcap_file,
-            extra_args=extra_args,
-        )
-    except RuntimeError as exc:
-        return jsonify({"running": False, "error": str(exc)}), 400
-    except ValueError as exc:
-        return jsonify({"running": False, "error": str(exc)}), 400
-
-    return jsonify(result)
-
-
-@app.route("/api/ettercap/mitm/stop", methods=["POST"])
-def ettercap_mitm_stop():
-    payload = request.get_json(silent=True) or {}
-    token = payload.get("engagement_token")
-    if not require_active_session(token or ""):
-        return jsonify({"running": False, "error": "Invalid or missing engagement token."}), 400
-
-    result = background_mitm.stop()
     result.setdefault("running", False)
     return jsonify(result)
 

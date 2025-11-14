@@ -17,20 +17,18 @@ except ImportError:  # pragma: no cover
     UTC = _tz.utc
 
 
-class BackgroundEttercapRunner:
-    """Manage a single long-running Ettercap session for a specific operation."""
+class BackgroundSniffer:
+    """Manage a single long-running Ettercap sniff session."""
 
-    def __init__(self, *, operation: str) -> None:
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._state: Dict[str, Any] | None = None
-        self._operation = operation
 
     def start(
         self,
         *,
         user: str,
         interface: str,
-        mitm_method: str | None = None,
         quiet: bool = True,
         text_mode: bool = True,
         target_a: str | None = None,
@@ -48,12 +46,11 @@ class BackgroundEttercapRunner:
         args, summary, target_display = build_ettercap_command(
             user=user,
             interface=interface,
-            operation=self._operation,
+            operation="sniff",
             quiet=quiet,
             text_mode=text_mode,
             target_a=target_a,
             target_b=target_b,
-            mitm_method=mitm_method,
             plugin=plugin,
             filter_script=filter_script,
             log_file=log_file,
@@ -91,30 +88,22 @@ class BackgroundEttercapRunner:
         watcher = threading.Thread(target=self._monitor_process, args=(state,), daemon=True)
         watcher.start()
 
-        label = summary.get("operation_label") if isinstance(summary, dict) else None
-        start_message = (label or "Operation").rstrip(".") + " started in the background."
-
         return {
             "running": True,
             "run_id": run_id,
             "summary": summary,
             "started_at": started_at,
-            "message": start_message,
+            "message": "Sniffing started in the background.",
         }
 
     def stop(self) -> Dict[str, Any]:
         with self._lock:
             state = self._state
             if not state or state["proc"].poll() is not None:
-                summary = state.get("summary") if state else None
-                label = None
-                if isinstance(summary, dict):
-                    label = summary.get("operation_label")
-                default_message = f"No {label or 'background'} session is currently running."
                 return {
                     "running": False,
-                    "summary": summary,
-                    "message": default_message,
+                    "summary": state.get("summary") if state else None,
+                    "message": "No sniffing session is currently running.",
                 }
             proc = state["proc"]
 
@@ -125,12 +114,7 @@ class BackgroundEttercapRunner:
             proc.kill()
             proc.wait()
 
-        summary = state.get("summary") if state else None
-        label = None
-        if isinstance(summary, dict):
-            label = summary.get("operation_label")
-        stop_message = f"{label or 'Background'} session stopped."
-        return {"running": False, "message": stop_message}
+        return {"running": False, "message": "Sniffing stopped."}
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -179,5 +163,4 @@ class BackgroundEttercapRunner:
         )
 
 
-background_sniffer = BackgroundEttercapRunner(operation="sniff")
-background_mitm = BackgroundEttercapRunner(operation="mitm")
+background_sniffer = BackgroundSniffer()

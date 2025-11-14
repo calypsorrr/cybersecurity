@@ -129,7 +129,14 @@
         <span class="badge text-bg-danger">Intrusive</span>
       </div>
       <div class="card-body">
-        <form method="post" action="{{ url_for('run_ettercap_route') }}" class="vstack gap-3" novalidate>
+        <form
+          id="mitmForm"
+          method="post"
+          action="{{ url_for('run_ettercap_route') }}"
+          class="vstack gap-3"
+          novalidate
+          data-no-overlay="true"
+        >
           <input type="hidden" name="operation" value="mitm">
 
           <div class="row g-3">
@@ -197,9 +204,12 @@
             <input id="mitmToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN" autocomplete="off" required>
           </div>
 
-          <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-danger">Start MITM</button>
-            <span class="text-muted small align-self-center">Identical arguments to the Linux CLI.</span>
+          <div class="d-flex flex-column gap-2">
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-danger" data-mitm-button>Start MITM</button>
+              <span class="text-muted small align-self-center">Identical arguments to the Linux CLI.</span>
+            </div>
+            <div id="mitmStatusMessage" class="small text-muted"></div>
           </div>
         </form>
       </div>

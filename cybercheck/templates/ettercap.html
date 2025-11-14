@@ -28,7 +28,14 @@
         <span class="badge text-bg-secondary">Passive</span>
       </div>
       <div class="card-body">
-        <form method="post" action="{{ url_for('run_ettercap_route') }}" class="vstack gap-3" novalidate>
+        <form
+          id="sniffForm"
+          method="post"
+          action="{{ url_for('run_ettercap_route') }}"
+          class="vstack gap-3"
+          novalidate
+          data-no-overlay="true"
+        >
           <input type="hidden" name="operation" value="sniff">
 
           <div class="row g-3">
@@ -102,9 +109,12 @@
             <input id="sniffToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN" autocomplete="off" required>
           </div>
 
-          <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-primary">Start sniffing</button>
-            <span class="text-muted small align-self-center">Results and stdout mirror the Linux CLI.</span>
+          <div class="d-flex flex-column gap-2">
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-primary" data-sniff-button>Start sniffing</button>
+              <span class="text-muted small align-self-center">Results and stdout mirror the Linux CLI.</span>
+            </div>
+            <div id="sniffStatusMessage" class="small text-muted"></div>
           </div>
         </form>
       </div>
@@ -353,5 +363,151 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const sniffForm = document.getElementById('sniffForm');
+    if (!sniffForm) return;
+
+    const button = sniffForm.querySelector('[data-sniff-button]');
+    const statusEl = document.getElementById('sniffStatusMessage');
+    let isRunning = false;
+    let pollTimer = null;
+
+    const setStatus = (message, tone = 'muted') => {
+      if (!statusEl) return;
+      statusEl.textContent = message || '';
+      statusEl.className = `small text-${tone}`;
+    };
+
+    const updateButton = () => {
+      if (!button) return;
+      if (isRunning) {
+        button.textContent = 'Stop sniffing';
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-outline-danger');
+      } else {
+        button.textContent = 'Start sniffing';
+        button.classList.remove('btn-outline-danger');
+        button.classList.add('btn-primary');
+      }
+    };
+
+    const schedulePoll = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (isRunning) {
+        pollTimer = setInterval(fetchStatus, 5000);
+      }
+    };
+
+    const buildPayload = () => {
+      const formData = new FormData(sniffForm);
+      const payload = {};
+      formData.forEach((value, key) => {
+        payload[key] = value;
+      });
+      payload.quiet = sniffForm.querySelector('#sniffQuiet')?.checked ? '1' : '0';
+      payload.text_mode = sniffForm.querySelector('#sniffTextMode')?.checked ? '1' : '0';
+      payload.operation = 'sniff';
+      return payload;
+    };
+
+    const getTokenPayload = () => {
+      const token = sniffForm.querySelector('[name="engagement_token"]')?.value || '';
+      return { engagement_token: token };
+    };
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('{{ url_for('ettercap_sniff_status') }}', { credentials: 'same-origin' });
+        if (!res.ok) throw new Error('Unable to query background status.');
+        const data = await res.json();
+        isRunning = !!data.running;
+        updateButton();
+        const summary = data.summary || {};
+        if (summary.pcap_file) {
+          const context = isRunning ? 'Sniffing in background' : 'Last capture saved to';
+          setStatus(`${context} ${summary.pcap_file}`, isRunning ? 'success' : 'muted');
+        } else if (!isRunning) {
+          setStatus('');
+        }
+        schedulePoll();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    const handleError = (err) => {
+      const message = err?.message || 'Request failed.';
+      setStatus(message, 'danger');
+    };
+
+    sniffForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (isRunning) {
+        await stopSniff();
+      } else {
+        await startSniff();
+      }
+    });
+
+    async function startSniff() {
+      if (!button) return;
+      button.disabled = true;
+      setStatus('Starting sniffing session…', 'muted');
+      try {
+        const payload = buildPayload();
+        const res = await fetch('{{ url_for('ettercap_sniff_start') }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Unable to start sniffing.');
+        isRunning = true;
+        updateButton();
+        const summary = data.summary || {};
+        const fileLabel = summary.pcap_file ? ` → ${summary.pcap_file}` : '';
+        setStatus(`Sniffing in background${fileLabel}`, 'success');
+        schedulePoll();
+      } catch (err) {
+        handleError(err);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function stopSniff() {
+      if (!button) return;
+      button.disabled = true;
+      setStatus('Stopping sniffing session…', 'muted');
+      try {
+        const res = await fetch('{{ url_for('ettercap_sniff_stop') }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(getTokenPayload()),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Unable to stop sniffing.');
+        isRunning = false;
+        updateButton();
+        setStatus(data.message || 'Sniffing stopped.', 'success');
+        schedulePoll();
+        await fetchStatus();
+      } catch (err) {
+        handleError(err);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    fetchStatus();
+  });
+</script>
 
 {% endblock %}

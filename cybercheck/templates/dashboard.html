@@ -37,6 +37,13 @@
       <span class="metric-subtext">Unique tools seen in the latest results</span>
     </div>
   </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">Open findings</span>
+      <span class="metric-value">{{ coverage.open_findings }}</span>
+      <span class="metric-subtext">Across mapped assets and controls</span>
+    </div>
+  </div>
 </div>
 
 <div class="row g-4">
@@ -108,6 +115,89 @@
     {% else %}
       <p class="text-muted mb-0">Once you run a scan it will appear here with timestamps and operator details.</p>
     {% endif %}
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12 col-xxl-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="fw-semibold">Asset inventory &amp; control mapping</span>
+        <span class="badge text-bg-primary">ATT&amp;CK coverage</span>
+      </div>
+      <div class="card-body">
+        {% if coverage.assets %}
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Owner</th>
+                  <th>Controls</th>
+                  <th>ATT&amp;CK tactics</th>
+                  <th>Open findings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for asset in coverage.assets %}
+                  <tr>
+                    <td>
+                      <div class="fw-semibold">{{ asset.name }}</div>
+                      <div class="small text-muted">{{ asset.category }} · {{ asset.scope }}</div>
+                    </td>
+                    <td>{{ asset.owner }}<div class="small text-muted">{{ asset.business_unit }}</div></td>
+                    <td>{{ asset.control_total or 0 }}</td>
+                    <td>{{ asset.tactics or '—' }}</td>
+                    <td>{{ asset.open_findings or 0 }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No assets registered. Add scope to enable risk-aware dashboards.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xxl-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="fw-semibold">Findings lifecycle</span>
+        <span class="badge text-bg-warning text-dark">Remediation</span>
+      </div>
+      <div class="card-body">
+        {% if findings %}
+          <div class="vstack gap-3">
+            {% for finding in findings %}
+              {% set status_key = (finding.status or 'open').lower() %}
+              {% if 'progress' in status_key %}
+                {% set badge_class = 'status-attention' %}
+              {% elif status_key == 'verified' %}
+                {% set badge_class = 'status-healthy' %}
+              {% elif status_key == 'open' %}
+                {% set badge_class = 'status-error' %}
+              {% else %}
+                {% set badge_class = 'status-unknown' %}
+              {% endif %}
+              <div class="timeline-item">
+                <div class="timeline-main">
+                  <div class="fw-semibold">{{ finding.title }}</div>
+                  <div class="text-muted small">{{ finding.asset_name or 'Unmapped asset' }} · {{ finding.control_name or 'Control not tagged' }}</div>
+                  <div class="small">Ticket: {{ finding.ticket or 'Not filed' }}</div>
+                </div>
+                <div class="d-flex flex-column align-items-end gap-1">
+                  <span class="timeline-tag {{ badge_class }}">{{ finding.status or 'Open' }}</span>
+                  <span class="badge text-bg-secondary">{{ finding.severity or 'Info' }}</span>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No findings recorded yet. Run scans or import tickets to populate the lifecycle.</p>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>
 

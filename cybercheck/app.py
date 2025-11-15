@@ -14,6 +14,15 @@ from cybercheck.config import SECRET_KEY, NMAP_PROFILES
 from cybercheck.utils.auth import require_active_session
 from cybercheck.scanners import nmap_scan, nikto_scan, scapy_ping_scan
 from cybercheck.scanners import run_ettercap
+from cybercheck.scanners.extended_tools import (
+    zap_scan,
+    gitleaks_scan,
+    trufflehog_scan,
+    trivy_scan,
+    grype_scan,
+    checkov_scan,
+    volatility_inspect,
+)
 from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import (
     fetch_asset_inventory,
@@ -22,6 +31,7 @@ from cybercheck.models.db import (
     fetch_last_runs,
 )
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
+from cybercheck.utils.reporting import build_control_report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
 from cybercheck.utils.background_sniffer import background_sniffer
@@ -201,6 +211,7 @@ def index():
         "open_findings": open_findings,
         "control_gaps": len(uncovered_controls),
     }
+    control_report = build_control_report(20)
     return render_template(
         "index.html",
         runs=runs,
@@ -210,6 +221,7 @@ def index():
         nmap_profiles=list(NMAP_PROFILES.keys()),
         scan_presets=presets,
         metrics=metrics,
+        control_report=control_report,
         active_page="home",
     )
 
@@ -739,6 +751,65 @@ def run_non_intrusive():
     return redirect(url_for("index"))
 
 
+@app.route("/run_appsec_suite", methods=["POST"])
+def run_appsec_suite():
+    tool = (request.form.get("tool") or "").strip()
+    target = (request.form.get("target") or "").strip()
+    user = (request.form.get("user") or "operator").strip() or "operator"
+    token = request.form.get("engagement_token")
+
+    if not target:
+        flash("Target is required.", "danger")
+        return redirect(url_for("index"))
+
+    active_required = tool in {"zap-baseline", "zap-api", "zap-full", "trivy", "grype", "checkov"}
+    if active_required and not require_active_session(token or ""):
+        flash("Engagement token required for active or network-facing scans.", "danger")
+        return redirect(url_for("index"))
+
+    if tool == "zap-baseline":
+        res = zap_scan(user=user, target=target, mode="baseline")
+        title = f"ZAP baseline: {target}"
+    elif tool == "zap-api":
+        api_def = (request.form.get("api_definition") or "").strip() or None
+        res = zap_scan(user=user, target=target, mode="api", api_def=api_def)
+        title = f"ZAP API: {target}"
+    elif tool == "zap-full":
+        policy = (request.form.get("zap_policy") or "").strip() or None
+        ajax_spider = _coerce_bool(request.form.get("ajax_spider"))
+        res = zap_scan(user=user, target=target, mode="full", policy=policy, ajax_spider=ajax_spider)
+        title = f"ZAP full: {target}"
+    elif tool == "gitleaks":
+        res = gitleaks_scan(user=user, target=target)
+        title = f"Gitleaks: {target}"
+    elif tool == "trufflehog":
+        res = trufflehog_scan(user=user, target=target)
+        title = f"TruffleHog: {target}"
+    elif tool == "trivy":
+        res = trivy_scan(user=user, target=target)
+        title = f"Trivy: {target}"
+    elif tool == "grype":
+        res = grype_scan(user=user, target=target)
+        title = f"Grype: {target}"
+    elif tool == "checkov":
+        res = checkov_scan(user=user, target=target)
+        title = f"Checkov: {target}"
+    elif tool == "volatility":
+        plugin = (request.form.get("vol_plugin") or "pslist").strip() or "pslist"
+        res = volatility_inspect(user=user, target=target, plugin=plugin)
+        title = f"Volatility ({plugin}): {target}"
+    else:
+        flash("Unknown tool requested.", "danger")
+        return redirect(url_for("index"))
+
+    return render_template(
+        "results.html",
+        result=res,
+        title=title,
+        active_page="home",
+    )
+
+
 @app.route("/run_active", methods=["POST"])
 def run_active():
     token = request.form.get("engagement_token")
@@ -849,6 +920,12 @@ def api_runs():
     rows = fetch_last_runs(50)
     out = [dict(r) for r in rows]
     return jsonify(out)
+
+
+@app.route("/api/compliance")
+def api_compliance():
+    report = build_control_report(50)
+    return jsonify(report)
 
 
 @app.route("/dashboard")

@@ -1,38 +1,30 @@
-"""Utility helpers for exporting run history."""
-
 from __future__ import annotations
 
-import json
-from datetime import datetime
-from typing import Any, Iterable, Mapping
+"""Compliance export helpers for dashboards and SIEM forwarding."""
 
-try:  # pragma: no cover - Py<3.11 fallback
-    from datetime import UTC
-except ImportError:  # pragma: no cover - Py<3.11 fallback
-    from datetime import timezone as _tz
+from typing import Dict, List
 
-    UTC = _tz.utc
-
-from cybercheck.models.db import fetch_last_runs
+from cybercheck.models.db import fetch_control_mappings, fetch_findings
+from cybercheck.utils.threat_intel import enrich_blob
 
 
-def _normalize_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    return [dict(row) for row in rows]
+def build_control_report(limit: int = 50) -> Dict[str, List[Dict]]:
+    controls = fetch_control_mappings()
+    findings = fetch_findings(limit)
 
+    enriched_findings: List[Dict] = []
+    for row in findings:
+        row_dict = dict(row)
+        blob = " ".join(str(v or "") for v in row_dict.values())
+        enriched_findings.append(
+            {
+                **row_dict,
+                "threat_intel": enrich_blob(blob),
+            }
+        )
 
-def generate_json_report(limit: int = 100) -> str:
-    """Return the latest run metadata as a JSON string.
-
-    The helper is used by the download endpoint and CLI utilities. It now lives
-    in the ``cybercheck`` package (previously it imported ``models`` as a loose
-    module) so any consumer using ``python -m cybercheck.utils.reporting`` just
-    works regardless of the working directory.
-    """
-
-    limit = max(1, limit)
-    rows = fetch_last_runs(limit)
-    payload = {
-        "generated_at": datetime.now(UTC).isoformat(),
-        "runs": _normalize_rows(rows),
+    return {
+        "controls": [dict(c) for c in controls],
+        "findings": [dict(f) for f in enriched_findings],
     }
-    return json.dumps(payload, indent=2)
+

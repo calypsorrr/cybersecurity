@@ -39,6 +39,13 @@
   </div>
   <div class="col-12 col-md-4">
     <div class="metric-card">
+      <span class="metric-label">Compliance export</span>
+      <span class="metric-value" style="font-size:1.2rem;">/api/compliance</span>
+      <span class="metric-subtext">Controls + findings enriched with CVE intel</span>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
       <span class="metric-label">Assets in scope</span>
       <span class="metric-value">{{ metrics.asset_count }}</span>
       <span class="metric-subtext">Registered with owners, SLAs, and ATT&CK mapping</span>
@@ -222,6 +229,80 @@
       </div>
     </div>
 
+    <!-- App/API, secrets, and supply-chain coverage -->
+    <div class="card shadow-sm mt-4">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <div>
+          <span class="fw-semibold d-block">App/API + supply chain suite</span>
+          <small class="text-muted">ZAP automation, secrets scanning, containers, IaC, and memory forensics</small>
+        </div>
+        <span class="badge text-bg-primary">Alerting ready</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/run_appsec_suite" class="vstack gap-3" novalidate>
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="suiteTool">Tooling</label>
+              <select id="suiteTool" name="tool" class="form-select" required>
+                <option value="zap-baseline">ZAP baseline (DAST)</option>
+                <option value="zap-api">ZAP API (OpenAPI/Swagger)</option>
+                <option value="zap-full">ZAP full (ajax spider + policy)</option>
+                <option value="gitleaks">Gitleaks (secrets)</option>
+                <option value="trufflehog">TruffleHog (secrets)</option>
+                <option value="trivy">Trivy (container/IaC)</option>
+                <option value="grype">Grype (SBOM vuln)</option>
+                <option value="checkov">Checkov (IaC posture)</option>
+                <option value="volatility">Volatility (memory)</option>
+              </select>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="suiteTarget">Target</label>
+              <input id="suiteTarget" class="form-control" name="target" placeholder="URL, image:tag, or file" required>
+              <div class="form-text">Targets can be URLs, container images, repos, or memory dumps.</div>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="apiDefinition">API definition (optional)</label>
+              <input id="apiDefinition" class="form-control" name="api_definition" placeholder="OpenAPI URL or file">
+              <div class="form-text">Used by ZAP API mode; ignored otherwise.</div>
+            </div>
+            <div class="col-12 col-lg-3">
+              <label class="form-label" for="zapPolicy">ZAP policy (optional)</label>
+              <input id="zapPolicy" class="form-control" name="zap_policy" placeholder="e.g., OWASP-C">
+            </div>
+            <div class="col-12 col-lg-3">
+              <label class="form-label" for="volPlugin">Volatility plugin</label>
+              <input id="volPlugin" class="form-control" name="vol_plugin" value="pslist" placeholder="pslist, netscan, ...">
+            </div>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="ajaxSpider" name="ajax_spider" value="true">
+            <label class="form-check-label" for="ajaxSpider">Enable AJAX spider (JS-heavy apps)</label>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="suiteUser">Operator</label>
+              <input id="suiteUser" class="form-control" name="user" placeholder="Your name or initials">
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="suiteToken">Engagement token (required for active scans)</label>
+              <input id="suiteToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN">
+              <div class="form-text">Used when running ZAP/Trivy/Grype/Checkov against live targets.</div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary">Run suite task</button>
+            <span class="text-muted small align-self-center">Outputs are log-friendly for SIEM forwarding.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </div>
 
   <!-- Secondary column -->
@@ -261,7 +342,8 @@
     <div class="card shadow-sm mt-4">
       <div class="card-header fw-semibold">API</div>
       <div class="card-body">
-        <p class="mb-0">GET <code>/api/runs</code> — returns last runs as JSON.</p>
+        <p class="mb-1">GET <code>/api/runs</code> — returns last runs as JSON.</p>
+        <p class="mb-0">GET <code>/api/compliance</code> — controls, mappings, and CVE-enriched findings for SIEM/BI.</p>
       </div>
     </div>
   </div>

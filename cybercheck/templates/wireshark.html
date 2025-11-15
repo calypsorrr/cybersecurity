@@ -170,7 +170,10 @@
               <small class="text-muted">Showing up to {{ report.samples|length }} packets</small>
             </div>
             {% if analysis.run_id %}
-              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('wireshark_full', run_id=analysis.run_id) }}" target="_blank" rel="noopener">Open full capture</a>
+              <div class="btn-group">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('wireshark_full', run_id=analysis.run_id) }}" target="_blank" rel="noopener">Open full capture</a>
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('wireshark_cleanup', run_id=analysis.run_id) }}" target="_blank" rel="noopener">Clean up noise</a>
+              </div>
             {% endif %}
           </div>
           <div class="table-responsive">

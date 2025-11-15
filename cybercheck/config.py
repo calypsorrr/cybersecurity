@@ -9,7 +9,28 @@ DATABASE: str = os.environ.get("DATABASE", "logs/cybercheck.db")
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # CLI tools allowed
-ALLOWED_TOOLS = ["nmap", "nikto", "bandit", "pip-audit", "safety", "scapy", "ettercap"]
+ALLOWED_TOOLS = [
+    "nmap",
+    "nikto",
+    "bandit",
+    "pip-audit",
+    "safety",
+    "scapy",
+    "ettercap",
+    # App/API security
+    "zap-baseline.py",
+    "zap-api-scan.py",
+    "zap-full-scan.py",
+    # Secrets and credential hygiene
+    "gitleaks",
+    "trufflehog",
+    # Supply chain and IaC
+    "trivy",
+    "grype",
+    "checkov",
+    # Forensics
+    "volatility3",
+]
 
 # Timeout defaults (seconds)
 DEFAULT_TIMEOUT = 300
@@ -21,6 +42,8 @@ NMAP_PROFILES = {
     "full-tcp": ["-p-", "-sV", "-Pn", "-T3"],
     "udp": ["-sU", "-Pn", "-T3"],
     "quick": ["-F", "-sV", "-Pn"],
+    "udp-discovery": ["-sU", "--top-ports", "50", "-Pn", "-T2"],
+    "http-enum": ["-sV", "-p", "80,443,8080", "--script", "http-enum", "-Pn", "-T3"],
     # Potentially intrusive; only use with explicit authorization.
     "vuln-scan": ["-sV", "-Pn", "--script", "vuln", "-T3"],
 }

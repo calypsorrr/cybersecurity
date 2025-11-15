@@ -1,69 +1,79 @@
 {% extends "layout.html" %}
 {% block body %}
 
-<div class="page-header">
-  <div>
-    <h1 class="display-6">Quick engagement console</h1>
-    <p class="page-subtitle">Launch targeted Nmap, Scapy and compliance scans with an audit-friendly workflow. Pivot to the operations dashboard to review telemetry across your authorized scope.</p>
-  </div>
-  <div class="d-flex flex-column align-items-lg-end gap-2">
-    <div class="metric-card p-3">
-      <span class="metric-label">Last active scan</span>
-      <span class="metric-value" style="font-size:1.25rem;">{{ metrics.last_active_finished }}</span>
-      <span class="metric-subtext">Updated automatically from recent activity</span>
+<div class="hero-banner mb-4">
+  <div class="hero-grid">
+    <div>
+      <span class="hero-badge">Unified security cockpit</span>
+      <h1 class="hero-title">Command offensive checks and defensive telemetry from one console.</h1>
+      <p class="hero-text">Run zero-trust friendly scans, capture every artifact, and jump straight into remediation workflows without leaving the browser.</p>
+
+      <div class="pill-row">
+        <span class="pill">Nmap + Nikto + Scapy</span>
+        <span class="pill">DAST / API hardening</span>
+        <span class="pill">Secrets &amp; supply chain</span>
+        <span class="pill">ATT&amp;CK mapped assets</span>
+      </div>
+
+      <div class="hero-actions">
+        <a class="btn btn-light" href="#active-scan">Start active scan</a>
+        <a class="btn btn-outline-light" href="{{ url_for('dashboard') }}">Open operations dashboard</a>
+        <small>Everything is logged, auditable, and exportable.</small>
+      </div>
+    </div>
+
+    <div class="hero-panel">
+      <h3 class="text-uppercase text-muted">Live posture</h3>
+      <div class="hero-metric">
+        <strong>{{ metrics.active_runs }}</strong>
+        <span>active tooling in the last window</span>
+      </div>
+      <div class="hero-metric">
+        <strong>{{ metrics.asset_count }}</strong>
+        <span>registered assets with owners</span>
+      </div>
+      <ul class="mini-list small">
+        <li>Last scan closed: {{ metrics.last_active_finished }}</li>
+        <li>Open findings: {{ metrics.open_findings }} · Control gaps: {{ metrics.control_gaps }}</li>
+        <li>API surfaces: <code>/api/runs</code> and <code>/api/compliance</code></li>
+      </ul>
     </div>
   </div>
 </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">Runs logged</span>
-      <span class="metric-value">{{ metrics.total_runs }}</span>
-      <span class="metric-subtext">Stored in the local SQLite engagement log</span>
-    </div>
+<div class="insights-grid mb-4">
+  <div class="metric-card">
+    <span class="metric-label">Runs logged</span>
+    <span class="metric-value">{{ metrics.total_runs }}</span>
+    <span class="metric-subtext">Local SQLite engagement history for every scan.</span>
   </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">Active tooling</span>
-      <span class="metric-value">{{ metrics.active_runs }}</span>
-      <span class="metric-subtext">Nmap, Scapy or Nikto in recent history</span>
-    </div>
+  <div class="metric-card">
+    <span class="metric-label">Open findings</span>
+    <span class="metric-value">{{ metrics.open_findings }}</span>
+    <span class="metric-subtext">Triaged issues ready for ticket handoff.</span>
   </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">API endpoint</span>
-      <span class="metric-value" style="font-size:1.4rem;">/api/runs</span>
-      <span class="metric-subtext">Pull structured JSON for downstream tooling</span>
-    </div>
+  <div class="metric-card">
+    <span class="metric-label">Control gaps</span>
+    <span class="metric-value">{{ metrics.control_gaps }}</span>
+    <span class="metric-subtext">Controls missing asset mapping.</span>
   </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">Compliance export</span>
-      <span class="metric-value" style="font-size:1.2rem;">/api/compliance</span>
-      <span class="metric-subtext">Controls + findings enriched with CVE intel</span>
-    </div>
+  <div class="metric-card">
+    <span class="metric-label">API endpoint</span>
+    <span class="metric-value" style="font-size:1.4rem;">/api/runs</span>
+    <span class="metric-subtext">Pull structured JSON for downstream tooling.</span>
   </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">Assets in scope</span>
-      <span class="metric-value">{{ metrics.asset_count }}</span>
-      <span class="metric-subtext">Registered with owners, SLAs, and ATT&CK mapping</span>
-    </div>
+  <div class="metric-card">
+    <span class="metric-label">Compliance export</span>
+    <span class="metric-value" style="font-size:1.2rem;">/api/compliance</span>
+    <span class="metric-subtext">Controls + findings enriched with CVE intel.</span>
   </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">Open findings</span>
-      <span class="metric-value">{{ metrics.open_findings }}</span>
-      <span class="metric-subtext">Lifecycle tracked for ticket handoff</span>
+  <div class="metric-card">
+    <div class="d-flex align-items-center justify-content-between">
+      <span class="metric-label">Operator hygiene</span>
+      <span class="metric-chip">Live</span>
     </div>
-  </div>
-  <div class="col-12 col-md-4">
-    <div class="metric-card">
-      <span class="metric-label">Control gaps</span>
-      <span class="metric-value">{{ metrics.control_gaps }}</span>
-      <span class="metric-subtext">Controls without mapped assets</span>
-    </div>
+    <span class="metric-value" style="font-size:1.55rem;">{{ metrics.asset_count }} assets</span>
+    <span class="metric-subtext">Verified owners, SLAs, and ATT&amp;CK mapping by target.</span>
   </div>
 </div>
 
@@ -72,7 +82,7 @@
   <div class="col-12 col-xxl-7">
 
     <!-- Active -->
-    <div class="card shadow-sm">
+    <div class="card shadow-sm" id="active-scan">
       <div class="card-header d-flex align-items-center justify-content-between">
         <div>
           <span class="fw-semibold d-block">Active reconnaissance</span>

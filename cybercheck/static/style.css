@@ -5,6 +5,11 @@
   --bg-pre: #0f172a;
   --fg-pre: #e6eef8;
 
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --card-border: rgba(148, 163, 184, 0.35);
+  --card-bg: #ffffff;
+
   /* Approx. header height for mobile sidebar offset */
   --header-h: 56px;
 }
@@ -16,6 +21,92 @@ body {
   background-color: #f1f5f9;
   color: #0f172a;
 }
+
+/* =======================================================================
+   Hero banner / summary rail
+   ======================================================================= */
+.hero-banner {
+  background: radial-gradient(circle at 15% 20%, rgba(59, 130, 246, 0.12), transparent 32%),
+              radial-gradient(circle at 85% 15%, rgba(99, 102, 241, 0.16), transparent 28%),
+              linear-gradient(145deg, #0f172a, #111827 35%, #0b172f 100%);
+  color: #e2e8f0;
+  border-radius: 1.4rem;
+  padding: clamp(1.5rem, 1.5rem + 1vw, 2.25rem);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 25px 65px rgba(15, 23, 42, 0.32);
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.hero-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 70% 40%, rgba(59, 130, 246, 0.22), transparent 30%);
+  pointer-events: none;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.hero-title {
+  font-size: clamp(1.6rem, 1.5rem + 1vw, 2.25rem);
+  font-weight: 800;
+  margin-top: 0.85rem;
+  margin-bottom: 0.6rem;
+  color: #f8fafc;
+}
+
+.hero-text { color: #cbd5e1; max-width: 720px; font-size: 1rem; }
+
+.pill-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.pill {
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-weight: 600;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; align-items: center; }
+.hero-actions .btn { height: auto; min-width: 0; padding-inline: 1rem; }
+.hero-actions small { color: #cbd5e1; }
+
+.hero-panel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 1.2rem;
+  padding: 1.1rem 1.2rem;
+  backdrop-filter: blur(6px);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-panel + .hero-panel { margin-top: 0.75rem; }
+
+.hero-panel h3 { font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.35rem; }
+.hero-panel .hero-metric { display: flex; align-items: baseline; gap: 0.65rem; }
+.hero-panel .hero-metric strong { font-size: 1.6rem; color: #f8fafc; }
+.hero-panel .hero-metric span { color: #cbd5e1; }
+.hero-panel .mini-list { margin: 0; padding-left: 1.1rem; color: #cbd5e1; }
 
 /* =======================================================================
    Buttons — normalize across pages (Bootstrap-safe)
@@ -417,10 +508,12 @@ body {
 }
 
 .metric-card {
-  background: #ffffff;
+  background: radial-gradient(circle at 20% 20%, rgba(59,130,246,0.08), transparent 35%),
+              linear-gradient(180deg, #ffffff, #f8fafc);
+  border: 1px solid var(--card-border);
   border-radius: 1.1rem;
   padding: 1.3rem 1.45rem;
-  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
   height: 100%;
 }
 
@@ -434,6 +527,16 @@ body {
 
 .metric-value { display: block; margin-top: 0.4rem; font-size: 2rem; font-weight: 800; }
 .metric-subtext { display: block; margin-top: 0.45rem; color: #94a3b8; font-size: 0.85rem; }
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.metric-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.65rem; border-radius: 999px; background: var(--accent-soft); color: #1d4ed8; font-weight: 700; font-size: 0.85rem; }
+.metric-chip::before { content: ""; width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.18); }
+.trend { color: #0f172a; font-weight: 700; }
 
 .status-card {
   border-radius: 1rem;

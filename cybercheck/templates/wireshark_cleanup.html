@@ -1,0 +1,111 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <p class="text-uppercase text-muted small mb-1">Packet intelligence</p>
+    <h1 class="h3 mb-2">Cleaned PCAP view</h1>
+    <p class="text-muted mb-0">
+      Showing packets flagged as unusual based on sensitive protocols, high-value service ports,
+      or the noisiest hosts observed in {{ summary.source_label or 'the capture' }}.
+    </p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('wireshark_console') }}">← Back to uploader</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('wireshark_full', run_id=run_id) }}" target="_blank" rel="noopener">Open full capture</a>
+  </div>
+</div>
+
+{% if report %}
+  <div class="card shadow-sm mb-4 pcap-summary-card">
+    <div class="card-body">
+      <div class="pcap-summary-header">
+        <div>
+          <p class="pcap-eyebrow">Capture overview</p>
+          <h2 class="h4 mb-1">{{ summary.source_label or 'PCAP upload' }}</h2>
+          <p class="text-muted mb-0 small">{{ summary.filter or 'No capture filter supplied' }}</p>
+        </div>
+        <div class="pcap-summary-pill">
+          <span>Packets kept</span>
+          <strong>{{ samples|length }}</strong>
+        </div>
+      </div>
+      <p class="small text-muted mb-0">Only packets with notable hosts, protocols, or ports are listed below.</p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+          <h2 class="h5 mb-0">Interesting packets</h2>
+          <small class="text-muted">{{ samples|length }} row{{ '' if samples|length == 1 else 's' }} highlighted for review</small>
+        </div>
+        <span class="badge text-bg-warning">Noise filtered</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle sample-packets-table">
+          <thead>
+            <tr>
+              <th scope="col">Time</th>
+              <th scope="col">Source</th>
+              <th scope="col">Destination</th>
+              <th scope="col">Proto</th>
+              <th scope="col">Len</th>
+              <th scope="col">Highlights</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pkt in samples %}
+              <tr>
+                <td class="text-nowrap">{{ pkt.timestamp }}</td>
+                <td class="font-monospace">
+                  {{ pkt.src }}
+                  {% if pkt.src_port %}<div class="small text-muted">port {{ pkt.src_port }}</div>{% endif %}
+                </td>
+                <td class="font-monospace">
+                  {{ pkt.dst }}
+                  {% if pkt.dst_port %}<div class="small text-muted">port {{ pkt.dst_port }}</div>{% endif %}
+                </td>
+                <td>{{ pkt.proto }}</td>
+                <td>{{ pkt.length }}</td>
+                <td>
+                  {% if pkt.highlights %}
+                    <ul class="list-unstyled mb-0 small">
+                      {% for reason in pkt.highlights %}
+                        <li>• {{ reason }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <span class="text-muted">No highlight recorded.</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% if pkt.hex %}
+                <tr>
+                  <td colspan="6"><pre class="result-pre small mb-0">{{ pkt.hex }}</pre></td>
+                </tr>
+              {% endif %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="text-muted">No packets met the "interesting" criteria. Try reviewing the full capture.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mt-4">
+    <div class="card-body">
+      <h2 class="h6 text-uppercase text-muted">Raw transcript</h2>
+      <pre class="result-pre small mb-0">{{ analysis.stdout or 'No stdout logged.' }}</pre>
+      {% if analysis.stderr %}
+        <div class="alert alert-danger small mt-3 mb-0">{{ analysis.stderr }}</div>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-warning">Capture report missing. Please re-upload the file.</div>
+{% endif %}
+{% endblock %}

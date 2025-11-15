@@ -15,7 +15,11 @@ except ImportError:  # pragma: no cover - Py<3.11 fallback
     UTC = _tz.utc
 
 from cybercheck.models.db import log_run
-from cybercheck.utils.wireshark_filters import build_filter_suggestion
+from cybercheck.utils.wireshark_filters import (
+    HIGH_VALUE_PORTS,
+    SENSITIVE_PROTOCOL_FILTERS,
+    build_filter_suggestion,
+)
 
 
 def _format_counter(counter: Counter, limit: int = 5) -> List[Dict[str, Any]]:
@@ -104,6 +108,7 @@ def _summarize_packets(
         timestamp = datetime.fromtimestamp(ts_value, UTC)
 
         src = dst = None
+        src_port = dst_port = None
         if packet.haslayer(IP):
             src = packet[IP].src
             dst = packet[IP].dst
@@ -113,6 +118,19 @@ def _summarize_packets(
         elif packet.haslayer(ARP):
             src = packet[ARP].psrc
             dst = packet[ARP].pdst
+
+        if packet.haslayer(TCP):
+            try:
+                src_port = int(packet[TCP].sport)
+                dst_port = int(packet[TCP].dport)
+            except Exception:
+                src_port = dst_port = None
+        elif packet.haslayer(UDP):
+            try:
+                src_port = int(packet[UDP].sport)
+                dst_port = int(packet[UDP].dport)
+            except Exception:
+                src_port = dst_port = None
 
         proto = _proto_label(packet)
         proto_counter[proto] += 1
@@ -144,6 +162,8 @@ def _summarize_packets(
             "proto": proto,
             "length": length,
             "info": summary,
+            "src_port": src_port,
+            "dst_port": dst_port,
         }
         if include_hex:
             sample_entry["hex"] = hexdump_fn(packet, dump=True)
@@ -384,3 +404,53 @@ def analyze_pcap_file(
         result["report"] = report
 
     return result
+
+
+def extract_interesting_packets(report: Dict[str, Any] | None) -> List[Dict[str, Any]]:
+    """Return packets that look worth triaging based on heuristics."""
+
+    if not report:
+        return []
+
+    samples = report.get("all_samples") or []
+    if not samples:
+        return []
+
+    interesting_hosts = set()
+    for collection in (report.get("talkers") or [], report.get("targets") or []):
+        for entry in collection[:2]:
+            label = entry.get("label")
+            if label:
+                interesting_hosts.add(label)
+
+    sensitive_protocols = {proto.upper() for proto in SENSITIVE_PROTOCOL_FILTERS.keys()}
+    high_value_ports = set(HIGH_VALUE_PORTS.keys())
+
+    flagged: List[Dict[str, Any]] = []
+    for packet in samples:
+        highlights: List[str] = []
+        proto = (packet.get("proto") or "").upper()
+        src = packet.get("src")
+        dst = packet.get("dst")
+        src_port = packet.get("src_port")
+        dst_port = packet.get("dst_port")
+
+        if proto in sensitive_protocols:
+            _, rationale = SENSITIVE_PROTOCOL_FILTERS[proto]
+            highlights.append(rationale)
+
+        if src in interesting_hosts:
+            highlights.append(f"{src} ranked among the busiest hosts.")
+        if dst in interesting_hosts and dst != src:
+            highlights.append(f"{dst} ranked among the busiest hosts.")
+
+        for port in (src_port, dst_port):
+            if isinstance(port, int) and port in high_value_ports:
+                highlights.append(f"Traffic touches {HIGH_VALUE_PORTS[port]} (port {port}).")
+
+        if highlights:
+            entry = dict(packet)
+            entry["highlights"] = highlights
+            flagged.append(entry)
+
+    return flagged

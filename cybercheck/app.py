@@ -18,7 +18,7 @@ from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import fetch_last_runs
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.monitor import network_monitor
-from cybercheck.utils.capture import analyze_pcap_file
+from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
 from cybercheck.utils.background_sniffer import background_sniffer
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 
@@ -424,6 +424,29 @@ def wireshark_full(run_id: str):
         report=report,
         summary=summary,
         samples=samples,
+        run_id=run_id,
+    )
+
+
+@app.route("/wireshark/cleanup/<run_id>")
+def wireshark_cleanup(run_id: str):
+    analysis = _get_wireshark_analysis(run_id)
+    if not analysis:
+        flash("That capture report has expired. Re-upload the PCAP to view it again.", "warning")
+        return redirect(url_for("wireshark_console"))
+
+    report = analysis.get("report") or {}
+    summary = report.get("summary") or {}
+    samples = extract_interesting_packets(report)
+
+    return render_template(
+        "wireshark_cleanup.html",
+        active_page="wireshark",
+        analysis=analysis,
+        report=report,
+        summary=summary,
+        samples=samples,
+        run_id=run_id,
     )
 
 

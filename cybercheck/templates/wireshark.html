@@ -73,7 +73,7 @@
               <h3 class="h6 text-muted text-uppercase">Protocols</h3>
               <ul class="list-unstyled mb-0">
                 {% for entry in report.protocols %}
-                  <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+                  <li>{{ entry.label }}</li>
                 {% else %}
                   <li class="text-muted">No traffic observed.</li>
                 {% endfor %}
@@ -83,7 +83,7 @@
               <h3 class="h6 text-muted text-uppercase">Top talkers</h3>
               <ul class="list-unstyled mb-0">
                 {% for entry in report.talkers %}
-                  <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+                  <li>{{ entry.label }}</li>
                 {% else %}
                   <li class="text-muted">No data</li>
                 {% endfor %}
@@ -93,7 +93,7 @@
               <h3 class="h6 text-muted text-uppercase">Top targets</h3>
               <ul class="list-unstyled mb-0">
                 {% for entry in report.targets %}
-                  <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+                  <li>{{ entry.label }}</li>
                 {% else %}
                   <li class="text-muted">No data</li>
                 {% endfor %}
@@ -105,7 +105,7 @@
               <h3 class="h6 text-muted text-uppercase">Ports</h3>
               <ul class="list-unstyled mb-0">
                 {% for entry in report.ports %}
-                  <li class="d-flex justify-content-between"><span>{{ entry.label }}</span><span class="fw-semibold">{{ entry.count }}</span></li>
+                  <li>{{ entry.label }}</li>
                 {% else %}
                   <li class="text-muted">No ports recorded.</li>
                 {% endfor %}
@@ -117,7 +117,6 @@
                 {% for pair in report.pairs %}
                   <li>
                     <div class="small text-muted">{{ pair.src }} → {{ pair.dst }}</div>
-                    <div class="fw-semibold">{{ pair.count }} packets</div>
                   </li>
                 {% else %}
                   <li class="text-muted">No flows available.</li>

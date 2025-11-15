@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - Py<3.11 fallback
     UTC = _tz.utc
 
 from cybercheck.models.db import log_run
+from cybercheck.utils.wireshark_filters import build_filter_suggestion
 
 
 def _format_counter(counter: Counter, limit: int = 5) -> List[Dict[str, Any]]:
@@ -239,6 +240,7 @@ def capture_packets(
             "samples": stats["samples"],
             "all_samples": stats["all_samples"],
         }
+        report["filter_advice"] = build_filter_suggestion(report)
 
         if not stats["captured"]:
             returncode = 1
@@ -347,6 +349,7 @@ def analyze_pcap_file(
             "samples": stats["samples"],
             "all_samples": stats["all_samples"],
         }
+        report["filter_advice"] = build_filter_suggestion(report)
 
         if not stats["captured"]:
             returncode = 1

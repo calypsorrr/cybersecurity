@@ -15,7 +15,12 @@ from cybercheck.utils.auth import require_active_session
 from cybercheck.scanners import nmap_scan, nikto_scan, scapy_ping_scan
 from cybercheck.scanners import run_ettercap
 from cybercheck.scanners.runner import run_tool
-from cybercheck.models.db import fetch_last_runs
+from cybercheck.models.db import (
+    fetch_asset_inventory,
+    fetch_control_mappings,
+    fetch_findings,
+    fetch_last_runs,
+)
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
@@ -179,18 +184,29 @@ def _format_timestamp(dt: datetime | None) -> str:
 @app.route("/")
 def index():
     runs = fetch_last_runs(20)
+    assets = fetch_asset_inventory()
+    controls = fetch_control_mappings()
+    findings = fetch_findings(5)
     presets = list_project_targets()
     active_tools = {"nmap", "nikto", "scapy"}
     active_runs = [r for r in runs if (r["tool"] or "").lower() in active_tools]
     last_active = _parse_timestamp(active_runs[0]["finished_at"]) if active_runs else None
+    open_findings = sum((row["open_findings"] or 0) for row in assets)
+    uncovered_controls = [c for c in controls if (c["asset_total"] or 0) == 0]
     metrics = {
         "total_runs": len(runs),
         "active_runs": len(active_runs),
         "last_active_finished": _format_timestamp(last_active),
+        "asset_count": len(assets),
+        "open_findings": open_findings,
+        "control_gaps": len(uncovered_controls),
     }
     return render_template(
         "index.html",
         runs=runs,
+        assets=assets,
+        controls=controls,
+        findings=findings,
         nmap_profiles=list(NMAP_PROFILES.keys()),
         scan_presets=presets,
         metrics=metrics,
@@ -838,6 +854,9 @@ def api_runs():
 @app.route("/dashboard")
 def dashboard():
     runs = fetch_last_runs(50)
+    assets = fetch_asset_inventory()
+    controls = fetch_control_mappings()
+    findings = fetch_findings(12)
     totals = Counter((r["tool"] or "unknown").lower() for r in runs)
 
     durations: list[float] = []
@@ -919,6 +938,13 @@ def dashboard():
         "last_finished": _format_timestamp(latest_finished),
     }
 
+    coverage = {
+        "assets": assets,
+        "controls": controls,
+        "uncovered_controls": [c for c in controls if (c["asset_total"] or 0) == 0],
+        "open_findings": sum((row["open_findings"] or 0) for row in assets),
+    }
+
     return render_template(
         "dashboard.html",
         active_page="dashboard",
@@ -926,6 +952,8 @@ def dashboard():
         tool_totals=tool_totals,
         target_cards=target_cards,
         timeline=timeline,
+        coverage=coverage,
+        findings=findings,
     )
 
 

@@ -37,6 +37,27 @@
       <span class="metric-subtext">Pull structured JSON for downstream tooling</span>
     </div>
   </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">Assets in scope</span>
+      <span class="metric-value">{{ metrics.asset_count }}</span>
+      <span class="metric-subtext">Registered with owners, SLAs, and ATT&CK mapping</span>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">Open findings</span>
+      <span class="metric-value">{{ metrics.open_findings }}</span>
+      <span class="metric-subtext">Lifecycle tracked for ticket handoff</span>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="metric-card">
+      <span class="metric-label">Control gaps</span>
+      <span class="metric-value">{{ metrics.control_gaps }}</span>
+      <span class="metric-subtext">Controls without mapped assets</span>
+    </div>
+  </div>
 </div>
 
 <div class="row g-4">
@@ -243,6 +264,95 @@
         <p class="mb-0">GET <code>/api/runs</code> — returns last runs as JSON.</p>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mt-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div>
+      <span class="fw-semibold d-block">Asset inventory &amp; control mapping</span>
+      <small class="text-muted">Tie each target to owners, SLAs, and ATT&amp;CK tactics before you launch another scan.</small>
+    </div>
+    <span class="badge text-bg-primary">Scope register</span>
+  </div>
+  <div class="card-body">
+    {% if assets %}
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Owner / BU</th>
+              <th>ATT&amp;CK coverage</th>
+              <th>Controls</th>
+              <th>Open / Verified</th>
+              <th>SLA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for asset in assets %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ asset.name }}</div>
+                  <div class="small text-muted">{{ asset.category }} · {{ asset.scope }}</div>
+                </td>
+                <td>
+                  <div class="fw-semibold">{{ asset.owner }}</div>
+                  <div class="small text-muted">{{ asset.business_unit }}</div>
+                </td>
+                <td>{{ asset.tactics or '—' }}</td>
+                <td>{{ asset.control_total or 0 }}</td>
+                <td>{{ asset.open_findings or 0 }} / {{ asset.verified_findings or 0 }}</td>
+                <td>{{ asset.sla_days }} day SLA</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Add an asset to start mapping scans to owners and controls.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card shadow-sm mt-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div>
+      <span class="fw-semibold d-block">Findings workflow</span>
+      <small class="text-muted">Track severity, owners, and tickets so remediation doesn&#39;t vanish when the tab closes.</small>
+    </div>
+    <span class="badge text-bg-warning text-dark">Remediation</span>
+  </div>
+  <div class="card-body">
+    {% if findings %}
+      <div class="vstack gap-3">
+        {% for finding in findings %}
+          {% set status_key = (finding.status or 'open').lower() %}
+          {% if 'progress' in status_key %}
+            {% set badge_class = 'status-attention' %}
+          {% elif status_key == 'verified' %}
+            {% set badge_class = 'status-healthy' %}
+          {% elif status_key == 'open' %}
+            {% set badge_class = 'status-error' %}
+          {% else %}
+            {% set badge_class = 'status-unknown' %}
+          {% endif %}
+          <div class="timeline-item">
+            <div class="timeline-main">
+              <div class="fw-semibold">{{ finding.title }}</div>
+              <div class="text-muted small">{{ finding.asset_name or 'Unmapped asset' }} · {{ finding.control_name or 'Control not tagged' }}</div>
+              <div class="small">Ticket: {{ finding.ticket or 'Not filed' }}</div>
+            </div>
+            <div class="d-flex flex-column align-items-end gap-1">
+              <span class="timeline-tag {{ badge_class }}">{{ finding.status or 'Open' }}</span>
+              <span class="badge text-bg-secondary">{{ finding.severity or 'Info' }}</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Capture findings to assign owners and exportable tickets.</p>
+    {% endif %}
   </div>
 </div>
 

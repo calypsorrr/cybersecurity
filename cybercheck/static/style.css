@@ -330,6 +330,17 @@ body {
   color: rgba(226, 232, 240, 0.7) !important;
 }
 
+.sample-packets-table th,
+.sample-packets-table td {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.sample-packets-table th:not(:last-child),
+.sample-packets-table td:not(:last-child) {
+  padding-right: 1.5rem;
+}
+
 @media (max-width: 767px) {
   .pcap-summary-card .card-body { padding: 1.5rem; }
   .pcap-summary-pill { width: 100%; text-align: left; }

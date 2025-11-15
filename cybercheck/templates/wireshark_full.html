@@ -115,6 +115,27 @@
     </div>
   </div>
 
+  {% if report.filter_advice %}
+    <div class="card shadow-sm mb-4 filter-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <p class="text-uppercase text-muted small mb-1">Recommended filter</p>
+            <h2 class="h5 mb-0">Focus on the riskiest traffic</h2>
+          </div>
+        </div>
+        <pre class="result-pre filter-display mb-3">{{ report.filter_advice.display_filter }}</pre>
+        <ul class="filter-reasons">
+          {% for reason in report.filter_advice.reasons %}
+            <li>{{ reason }}</li>
+          {% else %}
+            <li>No additional rationale supplied.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="card shadow-sm">
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">

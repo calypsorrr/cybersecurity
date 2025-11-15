@@ -205,6 +205,136 @@ body {
   border-bottom: 1px solid rgba(148, 163, 184, 0.25);
 }
 
+/* =======================================================================
+   Wireshark / PCAP view
+   ======================================================================= */
+.pcap-summary-card {
+  border: none;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, #0f172a, #1d4ed8);
+  color: #e2e8f0;
+  box-shadow: 0 25px 65px rgba(15, 23, 42, 0.25);
+}
+
+.pcap-summary-card .card-body { padding: 2rem; }
+
+.pcap-summary-card h2,
+.pcap-summary-card p,
+.pcap-summary-card small {
+  color: inherit;
+}
+
+.pcap-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.75rem;
+}
+
+.pcap-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  margin-bottom: 0.35rem;
+  opacity: 0.7;
+}
+
+.pcap-summary-pill {
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 1rem;
+  padding: 0.75rem 1.25rem;
+  text-align: right;
+  min-width: 180px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.pcap-summary-pill span {
+  display: block;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.pcap-summary-pill strong {
+  font-size: 2rem;
+  line-height: 1.2;
+}
+
+.pcap-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.pcap-metric {
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.pcap-metric-label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+  opacity: 0.75;
+}
+
+.pcap-metric-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+.pcap-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.pcap-breakdown-card {
+  background: rgba(15, 23, 42, 0.22);
+  border-radius: 1rem;
+  padding: 1rem 1.15rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.pcap-breakdown-card h3 {
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.pcap-breakdown-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pcap-breakdown-card li {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.pcap-breakdown-card li .text-muted {
+  color: rgba(226, 232, 240, 0.7) !important;
+}
+
+@media (max-width: 767px) {
+  .pcap-summary-card .card-body { padding: 1.5rem; }
+  .pcap-summary-pill { width: 100%; text-align: left; }
+}
+
 .guide-flags li:last-child { border-bottom: 0; }
 
 .guide-flags .flag {

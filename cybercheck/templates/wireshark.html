@@ -43,35 +43,53 @@
   <div class="col-lg-8">
     {% if analysis and analysis.report %}
       {% set report = analysis.report %}
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 pcap-summary-card">
         <div class="card-body">
-          <div class="d-flex flex-wrap gap-4 align-items-center mb-4">
+          <div class="pcap-summary-header">
             <div>
-              <p class="text-uppercase text-muted small mb-1">Packets analyzed</p>
-              <div class="display-6 fw-semibold">{{ report.summary.captured }}</div>
+              <p class="pcap-eyebrow">Capture overview</p>
+              <h2 class="h4 mb-1">{{ report.summary.source_label }}</h2>
+              <p class="text-muted mb-0 small">{{ report.summary.filter or 'No capture filter supplied' }}</p>
             </div>
-            <div>
-              <p class="text-uppercase text-muted small mb-1">Data volume</p>
-              <div class="h4 mb-0">{{ (report.summary.bytes / 1024)|round(1) }} KB</div>
-            </div>
-            <div>
-              <p class="text-uppercase text-muted small mb-1">Bandwidth</p>
-              <div class="h4 mb-0">{{ report.summary.bandwidth_bps }} bps</div>
-            </div>
-            <div>
-              <p class="text-uppercase text-muted small mb-1">Window</p>
-              <div class="h4 mb-0">{{ report.summary.duration|round(2) }}s</div>
-            </div>
-            <div>
-              <p class="text-uppercase text-muted small mb-1">Source</p>
-              <div class="h4 mb-0">{{ report.summary.source_label }}</div>
-              <small class="text-muted">{{ report.summary.filter }}</small>
+            <div class="pcap-summary-pill">
+              <span>Packets analyzed</span>
+              <strong>{{ report.summary.captured }}</strong>
             </div>
           </div>
-          <div class="row g-4">
-            <div class="col-md-4">
-              <h3 class="h6 text-muted text-uppercase">Protocols</h3>
-              <ul class="list-unstyled mb-0">
+
+          <div class="pcap-metric-grid">
+            <div class="pcap-metric">
+              <p class="pcap-metric-label">Data volume</p>
+              <p class="pcap-metric-value">{{ (report.summary.bytes / 1024)|round(1) }} KB</p>
+              <small class="text-muted">{{ report.summary.bytes }} bytes total</small>
+            </div>
+            <div class="pcap-metric">
+              <p class="pcap-metric-label">Bandwidth</p>
+              <p class="pcap-metric-value">{{ report.summary.bandwidth_bps }} bps</p>
+              <small class="text-muted">Approximate throughput</small>
+            </div>
+            <div class="pcap-metric">
+              <p class="pcap-metric-label">Window</p>
+              <p class="pcap-metric-value">{{ report.summary.duration|round(2) }}s</p>
+              <small class="text-muted">Capture duration</small>
+            </div>
+            <div class="pcap-metric">
+              <p class="pcap-metric-label">Bandwidth / pkt</p>
+              <p class="pcap-metric-value">
+                {% if report.summary.captured %}
+                  {{ (report.summary.bytes / report.summary.captured)|round(1) }} B
+                {% else %}
+                  0 B
+                {% endif %}
+              </p>
+              <small class="text-muted">Average payload size</small>
+            </div>
+          </div>
+
+          <div class="pcap-breakdown-grid">
+            <div class="pcap-breakdown-card">
+              <h3>Protocols</h3>
+              <ul>
                 {% for entry in report.protocols %}
                   <li>{{ entry.label }}</li>
                 {% else %}
@@ -79,9 +97,9 @@
                 {% endfor %}
               </ul>
             </div>
-            <div class="col-md-4">
-              <h3 class="h6 text-muted text-uppercase">Top talkers</h3>
-              <ul class="list-unstyled mb-0">
+            <div class="pcap-breakdown-card">
+              <h3>Top talkers</h3>
+              <ul>
                 {% for entry in report.talkers %}
                   <li>{{ entry.label }}</li>
                 {% else %}
@@ -89,9 +107,9 @@
                 {% endfor %}
               </ul>
             </div>
-            <div class="col-md-4">
-              <h3 class="h6 text-muted text-uppercase">Top targets</h3>
-              <ul class="list-unstyled mb-0">
+            <div class="pcap-breakdown-card">
+              <h3>Top targets</h3>
+              <ul>
                 {% for entry in report.targets %}
                   <li>{{ entry.label }}</li>
                 {% else %}
@@ -99,11 +117,9 @@
                 {% endfor %}
               </ul>
             </div>
-          </div>
-          <div class="row g-4 mt-1">
-            <div class="col-md-6">
-              <h3 class="h6 text-muted text-uppercase">Ports</h3>
-              <ul class="list-unstyled mb-0">
+            <div class="pcap-breakdown-card">
+              <h3>Ports</h3>
+              <ul>
                 {% for entry in report.ports %}
                   <li>{{ entry.label }}</li>
                 {% else %}
@@ -111,9 +127,9 @@
                 {% endfor %}
               </ul>
             </div>
-            <div class="col-md-6">
-              <h3 class="h6 text-muted text-uppercase">Flows</h3>
-              <ul class="list-unstyled mb-0">
+            <div class="pcap-breakdown-card">
+              <h3>Flows</h3>
+              <ul>
                 {% for pair in report.pairs %}
                   <li>
                     <div class="small text-muted">{{ pair.src }} → {{ pair.dst }}</div>

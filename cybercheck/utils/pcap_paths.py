@@ -10,6 +10,27 @@ _DEFAULT_PCAP_DIR = Path(BASE_DIR) / "logs" / "ettercap_pcaps"
 _DEFAULT_PCAP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _ensure_within_default_dir(path: Path) -> Path:
+    """Return *path* when it resides under the capture directory.
+
+    ``Path.resolve`` collapses any ``..`` segments, so this guard prevents
+    directory traversal attacks that could otherwise trick the application into
+    writing captures outside ``logs/ettercap_pcaps``. The check is intentionally
+    strict: even absolute paths must live inside the default directory so that
+    operators cannot accidentally target sensitive locations on disk from the
+    web UI.
+    """
+
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(_DEFAULT_PCAP_DIR)
+    except ValueError as exc:  # pragma: no cover - defensive programming
+        raise ValueError(
+            f"PCAP output paths must stay within {_DEFAULT_PCAP_DIR}"  # noqa: TRY003
+        ) from exc
+    return resolved
+
+
 def _slugify(value: str | None) -> str:
     if not value:
         return "capture"
@@ -19,21 +40,24 @@ def _slugify(value: str | None) -> str:
 
 
 def resolve_pcap_output_path(user: str, requested_path: str | None = None) -> str:
-    """Return an absolute PCAP path, creating parent directories as needed.
+    """Return a sanitized absolute PCAP path.
 
-    If ``requested_path`` is provided it is respected (with user-relative segments
-    resolved under the default capture directory). Otherwise a timestamped file
-    is created beneath ``logs/ettercap_pcaps`` so sniffing sessions always have a
-    valid capture destination.
+    User-provided paths are always forced to live under the default capture
+    directory. This prevents directory traversal tricks (for example passing
+    ``../../etc/shadow``) that could otherwise overwrite arbitrary files on the
+    host. When *requested_path* is empty we fall back to a timestamped file in
+    ``logs/ettercap_pcaps``.
     """
 
     if requested_path:
         path = Path(requested_path).expanduser()
         if not path.is_absolute():
-            path = (_DEFAULT_PCAP_DIR / path).resolve()
+            path = _DEFAULT_PCAP_DIR / path
+        sanitized = _ensure_within_default_dir(path)
     else:
         timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-        path = _DEFAULT_PCAP_DIR / f"ettercap-{timestamp}-{_slugify(user)}.pcap"
+        generated = _DEFAULT_PCAP_DIR / f"ettercap-{timestamp}-{_slugify(user)}.pcap"
+        sanitized = _ensure_within_default_dir(generated)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return str(path)
+    sanitized.parent.mkdir(parents=True, exist_ok=True)
+    return str(sanitized)

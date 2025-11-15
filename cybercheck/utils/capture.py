@@ -142,12 +142,7 @@ def _summarize_packets(
         if src or dst:
             pairs[(src, dst)] += 1
 
-        dst_port = None
-        if packet.haslayer(TCP):
-            dst_port = packet[TCP].dport
-        elif packet.haslayer(UDP):
-            dst_port = packet[UDP].dport
-        if dst_port is not None:
+        if isinstance(dst_port, int):
             ports[f"{proto}:{dst_port}"] += 1
 
         summary = packet.summary()

@@ -86,7 +86,7 @@
       <div class="card-header d-flex align-items-center justify-content-between">
         <div>
           <span class="fw-semibold d-block">Active reconnaissance</span>
-          <small class="text-muted">Nmap, Scapy and Nikto — requires engagement token</small>
+          <small class="text-muted2">Nmap, Scapy and Nikto — requires engagement token</small>
         </div>
         <span class="badge text-bg-danger">Authorized targets only</span>
       </div>
@@ -172,7 +172,7 @@
 
           <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-danger">Run active scan</button>
-            <span class="text-muted small align-self-center">Results appear immediately and in the dashboard history.</span>
+            <span class="text-muted2 small align-self-center">Results appear immediately and in the dashboard history.</span>
           </div>
         </form>
       </div>
@@ -183,7 +183,7 @@
       <div class="card-header d-flex align-items-center justify-content-between">
         <div>
           <span class="fw-semibold d-block">One-click standard sweep</span>
-          <small class="text-muted">Runs Nmap (standard), Nikto, and Scapy sequentially, saving artifacts.</small>
+          <small class="text-muted2">Runs Nmap (standard), Nikto, and Scapy sequentially, saving artifacts.</small>
         </div>
         <span class="badge text-bg-primary">Bundle</span>
       </div>
@@ -224,7 +224,7 @@
 
           <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-primary">Run standard sweep</button>
-            <span class="text-muted small align-self-center">Results saved to <code>logs</code> (txt) and optional PCAP.</span>
+            <span class="text-muted2 small align-self-center">Results saved to <code>logs</code> (txt) and optional PCAP.</span>
           </div>
         </form>
       </div>
@@ -235,7 +235,7 @@
       <div class="card-header d-flex align-items-center justify-content-between">
         <div>
           <span class="fw-semibold d-block">Local assurance checks</span>
-          <small class="text-muted">Safe to run against your own source tree</small>
+          <small class="text-muted2">Safe to run against your own source tree</small>
         </div>
         <span class="badge text-bg-success">Non-intrusive</span>
       </div>
@@ -285,7 +285,7 @@
 
           <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-primary">Run</button>
-            <span class="text-muted small align-self-center">Results appear below and in the dashboard history.</span>
+            <span class="text-muted2 small align-self-center">Results appear below and in the dashboard history.</span>
           </div>
         </form>
       </div>
@@ -296,7 +296,7 @@
       <div class="card-header d-flex align-items-center justify-content-between">
         <div>
           <span class="fw-semibold d-block">App/API + supply chain suite</span>
-          <small class="text-muted">ZAP automation, secrets scanning, containers, IaC, and memory forensics</small>
+          <small class="text-muted2">ZAP automation, secrets scanning, containers, IaC, and memory forensics</small>
         </div>
         <span class="badge text-bg-primary">Alerting ready</span>
       </div>
@@ -359,7 +359,7 @@
 
           <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-primary">Run suite task</button>
-            <span class="text-muted small align-self-center">Outputs are log-friendly for SIEM forwarding.</span>
+            <span class="text-muted2 small align-self-center">Outputs are log-friendly for SIEM forwarding.</span>
           </div>
         </form>
       </div>
@@ -386,7 +386,7 @@
               <tbody>
               {% for r in runs %}
                 <tr>
-                  <td class="text-muted">{{ r['id'] }}</td>
+                  <td class="text-muted2">{{ r['id'] }}</td>
                   <td><span class="badge text-bg-secondary">{{ r['tool'] }}</span></td>
                   <td class="text-truncate" style="max-width: 220px;" title="{{ r['target'] }}">{{ r['target'] }}</td>
                   <td class="text-nowrap">{{ r['started_at'] }}</td>
@@ -396,7 +396,7 @@
             </table>
           </div>
         {% else %}
-          <p class="text-muted mb-0">No runs recorded yet.</p>
+          <p class="text-muted2 mb-0">No runs recorded yet.</p>
         {% endif %}
       </div>
     </div>
@@ -415,7 +415,7 @@
   <div class="card-header d-flex align-items-center justify-content-between">
     <div>
       <span class="fw-semibold d-block">Asset inventory &amp; control mapping</span>
-      <small class="text-muted">Tie each target to owners, SLAs, and ATT&amp;CK tactics before you launch another scan.</small>
+      <small class="text-muted2">Tie each target to owners, SLAs, and ATT&amp;CK tactics before you launch another scan.</small>
     </div>
     <span class="badge text-bg-primary">Scope register</span>
   </div>
@@ -438,11 +438,11 @@
               <tr>
                 <td>
                   <div class="fw-semibold">{{ asset.name }}</div>
-                  <div class="small text-muted">{{ asset.category }} · {{ asset.scope }}</div>
+                  <div class="small text-muted2">{{ asset.category }} · {{ asset.scope }}</div>
                 </td>
                 <td>
                   <div class="fw-semibold">{{ asset.owner }}</div>
-                  <div class="small text-muted">{{ asset.business_unit }}</div>
+                  <div class="small text-muted2">{{ asset.business_unit }}</div>
                 </td>
                 <td>{{ asset.tactics or '—' }}</td>
                 <td>{{ asset.control_total or 0 }}</td>
@@ -454,7 +454,7 @@
         </table>
       </div>
     {% else %}
-      <p class="text-muted mb-0">Add an asset to start mapping scans to owners and controls.</p>
+      <p class="text-muted2 mb-0">Add an asset to start mapping scans to owners and controls.</p>
     {% endif %}
   </div>
 </div>
@@ -463,7 +463,7 @@
   <div class="card-header d-flex align-items-center justify-content-between">
     <div>
       <span class="fw-semibold d-block">Findings workflow</span>
-      <small class="text-muted">Track severity, owners, and tickets so remediation doesn&#39;t vanish when the tab closes.</small>
+      <small class="text-muted2">Track severity, owners, and tickets so remediation doesn&#39;t vanish when the tab closes.</small>
     </div>
     <span class="badge text-bg-warning text-dark">Remediation</span>
   </div>
@@ -484,7 +484,7 @@
           <div class="timeline-item">
             <div class="timeline-main">
               <div class="fw-semibold">{{ finding.title }}</div>
-              <div class="text-muted small">{{ finding.asset_name or 'Unmapped asset' }} · {{ finding.control_name or 'Control not tagged' }}</div>
+              <div class="text-muted2 small">{{ finding.asset_name or 'Unmapped asset' }} · {{ finding.control_name or 'Control not tagged' }}</div>
               <div class="small">Ticket: {{ finding.ticket or 'Not filed' }}</div>
             </div>
             <div class="d-flex flex-column align-items-end gap-1">
@@ -495,7 +495,7 @@
         {% endfor %}
       </div>
     {% else %}
-      <p class="text-muted mb-0">Capture findings to assign owners and exportable tickets.</p>
+      <p class="text-muted2 mb-0">Capture findings to assign owners and exportable tickets.</p>
     {% endif %}
   </div>
 </div>

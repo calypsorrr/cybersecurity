@@ -124,7 +124,7 @@
     let linkForce;
 
     // Track seen node IDs so we know when something is *new*
-    const knownNodeIds = new Set();
+    let knownNodeIds = new Set();
 
     // Zoom stays the same across updates
     svg.call(
@@ -215,6 +215,11 @@
     const renderGraph = (topology) => {
       const incomingNodes = topology.nodes || [];
       const incomingLinks = topology.links || [];
+
+      const incomingIds = new Set(incomingNodes.map(n => n.id));
+
+      // Drop any nodes that disappeared from the latest topology snapshot
+      nodes = nodes.filter(n => incomingIds.has(n.id));
 
       // Existing nodes by id so we can reuse positions
       const existingById = new Map(nodes.map(n => [n.id, n]));
@@ -390,17 +395,19 @@
         updateSummary(data);
         renderTable(data.links || []);
 
-        // Only touch the graph if there's at least one new node ID
+        // Re-render when new nodes appear or existing ones disappear
         const serverNodeIds = new Set((data.nodes || []).map(n => n.id));
         let hasNewNode = false;
         for (const id of serverNodeIds) {
           if (!knownNodeIds.has(id)) {
-            knownNodeIds.add(id);
             hasNewNode = true;
           }
         }
 
-        if (hasNewNode) {
+        const hasRemovedNode = [...knownNodeIds].some(id => !serverNodeIds.has(id));
+        knownNodeIds = serverNodeIds;
+
+        if (hasNewNode || hasRemovedNode) {
           renderGraph(data);
         }
       } catch (err) {

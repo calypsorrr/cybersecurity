@@ -61,6 +61,14 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
     return text in {"1", "true", "yes", "on"}
 
 
+def _slugify_target(value: str) -> str:
+    """Return a filesystem-friendly token for naming artifacts."""
+
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "_" for ch in value)
+    cleaned = cleaned.strip("._")
+    return cleaned or "target"
+
+
 ETTERCAP_MITM_METHODS = [
     {
         "value": "arp",
@@ -233,6 +241,12 @@ def scan_help():
             "name": "Nmap",
             "tagline": "Network discovery, service fingerprinting & basic vuln probing",
             "summary": "Use Nmap when you need to map hosts, enumerate ports/services, or verify exposure before and after changes.",
+            "steps": [
+                "Identify the target range (CIDR or host list) and whether host discovery (-sn) is permitted.",
+                "Start with a light scan (ping sweep or top ports) to gauge exposure without overwhelming the target.",
+                "Enable service/OS detection when you need actionable remediation evidence (versions, banners).",
+                "Save command invocations so you can rerun identical profiles after hardening to compare diffs.",
+            ],
             "common_flags": [
                 {"flag": "-sS", "meaning": "TCP SYN scan (stealthy, fast default)"},
                 {"flag": "-sV", "meaning": "Probe services to guess versions"},
@@ -258,11 +272,27 @@ def scan_help():
                     "notes": "Thorough reachability check before/after hardening; slower but comprehensive.",
                 },
             ],
+            "more_commands": [
+                {
+                    "label": "Save output for tickets",
+                    "cmd": "nmap -sS -sV -oA web-gateway 203.0.113.15",
+                },
+                {
+                    "label": "Scan only web ports",
+                    "cmd": "nmap -sS -p 80,443,8443,9443 -sV api.internal",
+                },
+            ],
         },
         {
             "name": "Nikto",
             "tagline": "Web server misconfiguration & vulnerability sweeps",
             "summary": "Run Nikto when validating HTTP/S attack surface: outdated servers, dangerous files, SSL issues, and known CVEs.",
+            "steps": [
+                "Confirm the target URLs/ports and whether virtual hosts or proxies are in use.",
+                "Run a baseline scan (-h target) to capture general exposure and SSL posture.",
+                "Add tuning flags (e.g., 0 4 9) to prioritize file disclosure and injection tests when triaging.",
+                "Export results (JSON/HTML) to attach to tickets or CI pipelines.",
+            ],
             "common_flags": [
                 {"flag": "-h", "meaning": "Target host, IP, or URL"},
                 {"flag": "-p", "meaning": "Port list (e.g. 80,443,8080)"},
@@ -288,11 +318,27 @@ def scan_help():
                     "notes": "Generates JSON for ingestion or compliance evidence.",
                 },
             ],
+            "more_commands": [
+                {
+                    "label": "Use a custom user agent",
+                    "cmd": "nikto -h https://blog.example -Useragent 'SecOps-Nikto'",
+                },
+                {
+                    "label": "Proxy through Burp/ZAP",
+                    "cmd": "nikto -h http://10.0.0.5 -useproxy http://127.0.0.1:8080",
+                },
+            ],
         },
         {
             "name": "Scapy",
             "tagline": "Packet crafting for validation, troubleshooting & custom probes",
             "summary": "Use Scapy when you need programmable packets: crafting probes, validating firewall rules, or building custom detections.",
+            "steps": [
+                "Start an interactive Scapy shell with sudo for raw socket access.",
+                "Load or craft the protocol layers you need (IP/TCP/UDP/ICMP/Ether).",
+                "Send probes with sr()/srp() and inspect replies to validate rules or behaviors.",
+                "Capture targeted traffic with sniff() to reproduce alerts or verify tuning.",
+            ],
             "common_flags": [
                 {"flag": "sr()", "meaning": "Send packets & receive replies (layer 3)"},
                 {"flag": "srp()", "meaning": "Layer-2 send/receive (ARP, etc.)"},
@@ -317,6 +363,151 @@ def scan_help():
                     "notes": "Troubleshoot TLS handshakes without launching full tcpdump.",
                 },
             ],
+            "more_commands": [
+                {
+                    "label": "Trace route with Scapy",
+                    "cmd": "sr(IP(dst='8.8.8.8', ttl=(1,16))/ICMP(), timeout=1)",
+                },
+                {
+                    "label": "Replay captured packet quickly",
+                    "cmd": "sendpfast(rdpcap('sample.pcap'), iface='eth0')",
+                },
+            ],
+        },
+        {
+            "name": "OWASP ZAP",
+            "tagline": "DAST for web apps and APIs with baseline/full profiles",
+            "summary": "Use ZAP when you need active crawling and attack simulation against web apps or OpenAPI-described APIs.",
+            "steps": [
+                "Choose the profile: baseline (passive), full (active), or API with the OpenAPI spec provided.",
+                "Point ZAP at an authenticated or staging target when possible to reduce false positives.",
+                "Let the spider/AJAX spider complete before reviewing alerts for authentication and input handling.",
+                "Export the HTML/JSON report and log the alert IDs you suppress for repeatability.",
+            ],
+            "common_flags": [
+                {"flag": "-t", "meaning": "Target URL"},
+                {"flag": "-u", "meaning": "Context/user auth file for authenticated scans"},
+                {"flag": "-J", "meaning": "Output JSON report"},
+                {"flag": "-r", "meaning": "Output HTML report"},
+                {"flag": "-z", "meaning": "Overrides for AJAX spider or policy toggles"},
+            ],
+            "examples": [
+                {
+                    "label": "Baseline passive crawl",
+                    "cmd": "zap-baseline.py -t https://staging.example.com -r zap-baseline.html",
+                    "notes": "Good first pass to catch missing security headers and basic issues without active attacks.",
+                },
+                {
+                    "label": "API scan with OpenAPI",
+                    "cmd": "zap-api-scan.py -t https://api.example.com/openapi.json -f openapi -r zap-api.html",
+                    "notes": "Exercises API endpoints and reports auth/input weaknesses.",
+                },
+                {
+                    "label": "Full active scan",
+                    "cmd": "zap-full-scan.py -t https://app.example.com -r zap-full.html",
+                    "notes": "Runs active attacks; schedule during maintenance windows.",
+                },
+            ],
+            "more_commands": [
+                {
+                    "label": "Route traffic through proxy",
+                    "cmd": "zap-baseline.py -t https://app -P http://127.0.0.1:8080",
+                },
+                {
+                    "label": "Authenticated context",
+                    "cmd": "zap-full-scan.py -t https://app --auth login.context -r zap-auth.html",
+                },
+            ],
+        },
+        {
+            "name": "Ettercap",
+            "tagline": "Layer-2 interception, MITM testing, and credential harvesting",
+            "summary": "Use Ettercap in controlled lab segments to validate NAC, DHCP snooping, and detection of ARP poisoning attempts.",
+            "steps": [
+                "Ensure you are on an authorized, isolated network segment; enable IP forwarding if relaying traffic.",
+                "Choose targets (single host, range, or gateway) and select ARP poisoning or passive sniffing mode.",
+                "Start unified sniffing and watch for credentials or cleartext protocols in the log window.",
+                "Stop the attack and restore ARP tables after testing to avoid lingering disruption.",
+            ],
+            "common_flags": [
+                {"flag": "-T", "meaning": "Text-only UI"},
+                {"flag": "-M arp:remote", "meaning": "Enable ARP MITM between targets"},
+                {"flag": "-i", "meaning": "Interface to bind (e.g., eth0)"},
+                {"flag": "-w", "meaning": "Write captured packets to pcap"},
+                {"flag": "-L", "meaning": "Log credentials to file"},
+            ],
+            "examples": [
+                {
+                    "label": "ARP poison two hosts",
+                    "cmd": "sudo ettercap -T -M arp:remote /10.10.0.5/ /10.10.0.10/",
+                    "notes": "Validates whether NAC/IDS blocks L2 MITM attempts.",
+                },
+                {
+                    "label": "MITM gateway and subnet",
+                    "cmd": "sudo ettercap -T -M arp:remote /10.10.0.1/ /10.10.0.0-255/",
+                    "notes": "Useful for lab validation of DHCP snooping/DAI protections.",
+                },
+                {
+                    "label": "Capture creds to file",
+                    "cmd": "sudo ettercap -T -M arp:remote -L creds.log /victim/ /gateway/",
+                    "notes": "Stores intercepted credentials for forensic review in test environments.",
+                },
+            ],
+            "more_commands": [
+                {
+                    "label": "Write packets for later analysis",
+                    "cmd": "sudo ettercap -T -M arp:remote -w ettercap.pcap /host/ /gw/",
+                },
+                {
+                    "label": "Use a specific network interface",
+                    "cmd": "sudo ettercap -T -i eth1 -M arp:remote /10.0.0.0-50/ /router/",
+                },
+            ],
+        },
+        {
+            "name": "Secrets & supply chain",
+            "tagline": "Gitleaks/TruffleHog for secrets, Trivy/Grype for images, Checkov for IaC",
+            "summary": "Use these when validating repos and build artifacts before release to catch exposed credentials, vulnerable base images, and misconfigured infrastructure code.",
+            "steps": [
+                "Run secret scanners (Gitleaks or TruffleHog) on the repo to block committed keys or tokens.",
+                "Generate or load an SBOM, then scan images with Trivy/Grype to flag vulnerable packages.",
+                "Lint IaC (Terraform/CloudFormation/K8s) with Checkov to catch misconfigurations before deploy.",
+                "Record the scanner versions and baselines so CI jobs can diff and gate merges consistently.",
+            ],
+            "common_flags": [
+                {"flag": "gitleaks detect --source .", "meaning": "Scan current repo for secrets"},
+                {"flag": "trufflehog filesystem .", "meaning": "Deep entropy+regex search for secrets"},
+                {"flag": "trivy image", "meaning": "Scan container images for CVEs and misconfig"},
+                {"flag": "grype <image>", "meaning": "Alternative image scanner using Syft SBOM"},
+                {"flag": "checkov -d .", "meaning": "Scan IaC directory for policy violations"},
+            ],
+            "examples": [
+                {
+                    "label": "Repo secret sweep",
+                    "cmd": "gitleaks detect --source . --report-path gitleaks.json",
+                    "notes": "Use in pre-commit or CI to prevent leaking credentials.",
+                },
+                {
+                    "label": "Container CVE scan",
+                    "cmd": "trivy image --scanners vuln,secret registry.example.com/app:latest",
+                    "notes": "Combines vuln + secret checks before pushing to production registries.",
+                },
+                {
+                    "label": "IaC posture check",
+                    "cmd": "checkov -d infrastructure/terraform -o json",
+                    "notes": "Exports findings for dashboards and merge gating.",
+                },
+            ],
+            "more_commands": [
+                {
+                    "label": "Scan with Grype using SBOM",
+                    "cmd": "syft registry.example.com/app:latest -o json > sbom.json && grype sbom:sbom.json",
+                },
+                {
+                    "label": "TruffleHog git history",
+                    "cmd": "trufflehog git --json . > trufflehog-history.json",
+                },
+            ],
         },
     ]
 
@@ -332,9 +523,19 @@ def scan_help():
             "why": "Purpose-built HTTP checklist catches outdated software and dangerous URIs.",
         },
         {
+            "task": "DAST against staging web apps or APIs",
+            "recommended": "OWASP ZAP baseline/full or API profile with spec",
+            "why": "Combines crawling with active checks to surface auth, input, and policy gaps.",
+        },
+        {
             "task": "Test firewall rules or reproduce IDS alerts with crafted packets",
             "recommended": "Scapy (sr/srp/sendp) with custom layers",
             "why": "Lets you build packets by hand and observe responses in real time.",
+        },
+        {
+            "task": "Simulate ARP spoofing to validate NAC/DAI",
+            "recommended": "Ettercap (-T -M arp:remote /victim/ /gateway/)",
+            "why": "Exercises L2 protections and detection with reversible, controlled MITM.",
         },
         {
             "task": "Continuous ping/port monitoring for outages",
@@ -345,6 +546,11 @@ def scan_help():
             "task": "Service validation after remediation",
             "recommended": "Re-run the same Nmap profile + Nikto (if web) to compare diffs",
             "why": "Deterministic scans provide evidence that findings were addressed.",
+        },
+        {
+            "task": "Pre-release repo/image/IaC hygiene",
+            "recommended": "Secrets & supply chain suite (Gitleaks/Trivy/Checkov)",
+            "why": "Catches embedded secrets, vulnerable packages, and misconfigurations before deploy.",
         },
     ]
 
@@ -806,6 +1012,140 @@ def run_appsec_suite():
         "results.html",
         result=res,
         title=title,
+        active_page="home",
+    )
+
+
+@app.route("/run_standard_suite", methods=["POST"])
+def run_standard_suite():
+    """Run the default active trio and persist artifacts for quick baselining."""
+
+    token = request.form.get("engagement_token")
+    if not require_active_session(token or ""):
+        flash("Invalid or missing engagement token. Active scans denied.", "danger")
+        return redirect(url_for("index"))
+
+    target = (request.form.get("target") or "").strip()
+    user = (request.form.get("user") or "operator").strip() or "operator"
+    capture_traffic = _coerce_bool(request.form.get("capture_traffic"), default=True)
+    interface = (request.form.get("capture_interface") or "").strip()
+
+    if not target:
+        flash("Target required for the standard sweep.", "danger")
+        return redirect(url_for("index"))
+
+    started = datetime.now(UTC)
+    slug = _slugify_target(target)
+    logs_dir = BASE_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    report_path = logs_dir / f"standard-suite-{started.strftime('%Y%m%d-%H%M%S')}-{slug}.txt"
+
+    steps: list[dict[str, Any]] = []
+    sniff_started = False
+    sniff_summary: dict[str, Any] | None = None
+    sniff_error: str | None = None
+    pcap_file: str | None = None
+
+    if capture_traffic:
+        if not interface:
+            flash("Interface required to capture packets. Capture skipped.", "warning")
+        else:
+            try:
+                pcap_file = resolve_pcap_output_path(user, f"standard-suite-{slug}.pcap")
+                sniff_resp = background_sniffer.start(
+                    user=user,
+                    interface=interface,
+                    quiet=True,
+                    text_mode=True,
+                    pcap_file=pcap_file,
+                )
+                sniff_started = sniff_resp.get("running", False)
+                sniff_summary = sniff_resp.get("summary")
+            except Exception as exc:  # pragma: no cover - runtime safeguard
+                sniff_error = str(exc)
+                flash(f"Packet capture could not start: {exc}", "warning")
+
+    def _append_step(name: str, run: dict[str, Any]) -> None:
+        preview = (run.get("stdout") or "").splitlines()
+        steps.append(
+            {
+                "name": name,
+                "returncode": run.get("returncode"),
+                "stdout": run.get("stdout") or "",
+                "stderr": run.get("stderr") or "",
+                "started_at": run.get("started_at"),
+                "finished_at": run.get("finished_at"),
+                "preview": "\n".join(preview[:8]),
+            }
+        )
+
+    try:
+        nmap_res = nmap_scan(user=user, target=target, profile="standard", extra_args=["-oN", "-"])
+        _append_step("Nmap (standard)", nmap_res)
+
+        nikto_res = nikto_scan(user=user, target_url=target)
+        _append_step("Nikto", nikto_res)
+
+        scapy_res = scapy_ping_scan(user=user, target=target, count=4, timeout=2.0)
+        _append_step("Scapy ICMP", scapy_res)
+    finally:
+        if sniff_started:
+            stop_result = background_sniffer.stop()
+            if stop_result:
+                sniff_summary = sniff_summary or {}
+                sniff_summary["stopped"] = True
+                sniff_summary["stop_message"] = stop_result.get("message")
+
+    lines: list[str] = []
+    lines.append("# Standard sweep report")
+    lines.append(f"Target: {target}")
+    lines.append(f"Operator: {user}")
+    lines.append(f"Started: {started.isoformat()}")
+    if pcap_file:
+        lines.append(f"PCAP: {pcap_file}")
+    if sniff_error:
+        lines.append(f"Capture warning: {sniff_error}")
+    lines.append("")
+
+    for step in steps:
+        lines.append(f"## {step['name']}")
+        lines.append(f"Return code: {step['returncode']}")
+        if step.get("started_at"):
+            lines.append(f"Started: {step['started_at']}")
+        if step.get("finished_at"):
+            lines.append(f"Finished: {step['finished_at']}")
+        lines.append("-- STDOUT --")
+        lines.append(step.get("stdout") or "(empty)")
+        if step.get("stderr"):
+            lines.append("-- STDERR --")
+            lines.append(step["stderr"])
+        lines.append("")
+
+    with report_path.open("w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
+
+    try:
+        report_display = report_path.relative_to(BASE_DIR)
+    except ValueError:
+        report_display = report_path
+
+    suite_result = {
+        "target": target,
+        "user": user,
+        "report_path": str(report_display),
+        "pcap_path": pcap_file,
+        "started_at": started.isoformat(),
+        "steps": steps,
+        "sniff_summary": sniff_summary,
+        "sniff_error": sniff_error,
+    }
+
+    flash("Standard sweep finished. Logs saved to disk.", "success")
+    return render_template(
+        "results.html",
+        result={"steps": len(steps)},
+        suite_result=suite_result,
+        title=f"Standard sweep: {target}",
         active_page="home",
     )
 

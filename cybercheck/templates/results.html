@@ -3,6 +3,57 @@
 
 <h2 class="h4 mb-3">{{ title }}</h2>
 
+{% if suite_result %}
+  <div class="card shadow-sm mb-3">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Standard sweep bundle</span>
+      <span class="badge text-bg-primary">One-click run</span>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+          <div class="fw-semibold">Target</div>
+          <div class="small text-muted">{{ suite_result.target }}</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="fw-semibold">Operator</div>
+          <div class="small text-muted">{{ suite_result.user }}</div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="fw-semibold">Artifacts</div>
+          <div class="small text-muted">Txt: {{ suite_result.report_path }}<br>PCAP: {{ suite_result.pcap_path or '—' }}</div>
+        </div>
+      </div>
+
+      {% if suite_result.sniff_error %}
+        <div class="alert alert-warning">{{ suite_result.sniff_error }}</div>
+      {% elif suite_result.sniff_summary %}
+        <div class="alert alert-secondary">
+          <div class="fw-semibold">Capture status</div>
+          <div class="small mb-0">{{ suite_result.sniff_summary.stop_message or suite_result.sniff_summary.message or 'Packet capture initiated.' }}</div>
+        </div>
+      {% endif %}
+
+      <div class="list-group list-group-flush">
+        {% for step in suite_result.steps %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <div class="fw-semibold">{{ step.name }}</div>
+              {% set ok = step.returncode == 0 %}
+              <span class="badge {{ 'text-bg-success' if ok else 'text-bg-warning' }}">{{ 'ok' if ok else 'check output' }}</span>
+            </div>
+            {% if step.preview %}
+              <pre class="result-pre small mb-0">{{ step.preview }}</pre>
+            {% else %}
+              <div class="text-muted small mb-0">No stdout captured.</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endif %}
+
 {# -------------------- Ettercap summary -------------------- #}
 {% if parsed_ettercap %}
   <div class="card shadow-sm mb-3">

@@ -50,7 +50,6 @@
             <label for="interfaceSelect" class="form-label mb-0 small text-muted">Interface</label>
             <select id="interfaceSelect" class="form-select form-select-sm" style="min-width: 180px;"></select>
           </div>
-          <button class="btn btn-sm btn-primary" id="refreshTopology" type="button">Refresh map</button>
           <div class="topology-legend" aria-label="Legend">
             <span class="legend-pill local">Local</span>
             <span class="legend-pill private">Private</span>
@@ -96,7 +95,6 @@
     const canvas = document.getElementById('topologyCanvas');
     const tableBody = document.getElementById('connectionTable');
     const summary = document.getElementById('topologySummary');
-    const refreshBtn = document.getElementById('refreshTopology');
     const ifaceSelect = document.getElementById('interfaceSelect');
 
     const width = canvas.clientWidth || 720;
@@ -320,9 +318,31 @@
 
     const setLoadingState = (state) => {
       loading = state;
-      if (refreshBtn) {
-        refreshBtn.disabled = state;
+    };
+
+    const friendlyInterfaceName = (name) => {
+      if (!name) return '(default capture)';
+
+      const lower = name.toLowerCase();
+      let prefix = '';
+
+      if (lower === 'lo' || lower === 'lo0') {
+        prefix = 'Loopback';
+      } else if (/^(en|eth|em|p[0-9]+p)/.test(lower)) {
+        prefix = 'Ethernet';
+      } else if (/^(wl|wlan)/.test(lower)) {
+        prefix = 'Wi‑Fi';
+      } else if (/^(br|bridge)/.test(lower)) {
+        prefix = 'Bridge';
+      } else if (/^vmnet|^vboxnet|^virbr/.test(lower)) {
+        prefix = 'Virtual adapter';
       }
+
+      if (prefix) {
+        return `${prefix} (${name})`;
+      }
+
+      return name;
     };
 
     const loadInterfaces = async () => {
@@ -335,13 +355,13 @@
 
         const defaultOpt = document.createElement('option');
         defaultOpt.value = '';
-        defaultOpt.textContent = '(default interface)';
+        defaultOpt.textContent = friendlyInterfaceName('');
         ifaceSelect.appendChild(defaultOpt);
 
         (data.interfaces || []).forEach(name => {
           const opt = document.createElement('option');
           opt.value = name;
-          opt.textContent = name;
+          opt.textContent = friendlyInterfaceName(name);
           if (data.active && data.active === name) {
             opt.selected = true;
           }
@@ -425,10 +445,6 @@
     update();
     loadInterfaces();
     setInterval(update, 1000);
-
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => update());
-    }
   })();
 </script>
 {% endblock %}

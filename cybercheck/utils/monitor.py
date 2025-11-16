@@ -448,17 +448,16 @@ class NetworkMonitor:
 
             node_map: Dict[str, Dict[str, object]] = {}
             links: List[Dict[str, object]] = []
-            allowed_roles = {"local", "private"}
             for src, dsts in self._window_src_unique.items():
                 for dst, count in dsts.most_common(20):
-                    src_role = _classify_ip_role(src, self._local_ips)
-                    dst_role = _classify_ip_role(dst, self._local_ips)
-
-                    if src_role not in allowed_roles or dst_role not in allowed_roles:
-                        continue
-
-                    node_map.setdefault(src, {"id": src, "label": src, "role": src_role})
-                    node_map.setdefault(dst, {"id": dst, "label": dst, "role": dst_role})
+                    node_map.setdefault(
+                        src,
+                        {"id": src, "label": src, "role": _classify_ip_role(src, self._local_ips)},
+                    )
+                    node_map.setdefault(
+                        dst,
+                        {"id": dst, "label": dst, "role": _classify_ip_role(dst, self._local_ips)},
+                    )
                     links.append({"source": src, "target": dst, "packets": int(count)})
 
             links.sort(key=lambda link: link.get("packets", 0), reverse=True)

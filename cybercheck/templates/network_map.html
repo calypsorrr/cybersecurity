@@ -4,18 +4,9 @@
 <div class="page-header">
   <div>
     <h1 class="h2 mb-2">Network map</h1>
-    <p class="page-subtitle mb-0">Generate a relationship map from recent local traffic to understand which systems are talking
-to each other. Refresh when you want a new snapshot; only local and private addresses are shown.</p>
+    <p class="page-subtitle mb-0">Generate a relationship map from live packet captures to understand which systems are talking to each other. Keep the page open to watch the topology settle as new flows appear.</p>
   </div>
-  <div class="d-flex align-items-center gap-2">
-    <button class="btn btn-sm btn-outline-primary" id="refreshTopology" type="button">Refresh map</button>
-    <div class="btn-group" role="group" aria-label="Zoom controls">
-      <button class="btn btn-sm btn-outline-secondary" id="zoomOut" type="button">−</button>
-      <button class="btn btn-sm btn-outline-secondary" id="zoomReset" type="button">Reset</button>
-      <button class="btn btn-sm btn-outline-secondary" id="zoomIn" type="button">+</button>
-    </div>
-    <div class="text-end small text-muted ms-2" id="topologyStatus"></div>
-  </div>
+  <div class="text-end small text-muted" id="topologyStatus"></div>
 </div>
 
 <div class="row g-4" id="topologySummary">
@@ -100,19 +91,11 @@ to each other. Refresh when you want a new snapshot; only local and private addr
     const summary = document.getElementById('topologySummary');
 
     const width = canvas.clientWidth || 720;
-    const height = 640;
+    const height = 520;
     const svg = d3.select(canvas)
       .append('svg')
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
-
-    const zoomGroup = svg.append('g');
-    const zoom = d3.zoom()
-      .scaleExtent([0.5, 4])
-      .on('zoom', (event) => {
-        zoomGroup.attr('transform', event.transform);
-      });
-    svg.call(zoom);
 
     let simulation;
 
@@ -168,9 +151,9 @@ to each other. Refresh when you want a new snapshot; only local and private addr
       const nodes = (topology.nodes || []).map(d => ({ ...d }));
       const links = (topology.links || []).map(d => ({ ...d }));
 
-      zoomGroup.selectAll('*').remove();
+      svg.selectAll('*').remove();
 
-      const link = zoomGroup.append('g')
+      const link = svg.append('g')
         .attr('stroke', '#cbd5e1')
         .attr('stroke-opacity', 0.5)
         .selectAll('line')
@@ -179,7 +162,7 @@ to each other. Refresh when you want a new snapshot; only local and private addr
         .append('line')
         .attr('stroke-width', d => Math.max(1.5, Math.log1p(d.packets || 1)));
 
-      const node = zoomGroup.append('g')
+      const node = svg.append('g')
         .selectAll('circle')
         .data(nodes)
         .enter()
@@ -227,7 +210,7 @@ to each other. Refresh when you want a new snapshot; only local and private addr
         const response = await fetch('/api/network_topology');
         const data = await response.json();
 
-        const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of local traffic.`;
+        const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of traffic.`;
         statusEl.textContent = status;
         updateSummary(data);
         renderTable(data.links || []);
@@ -238,22 +221,8 @@ to each other. Refresh when you want a new snapshot; only local and private addr
       }
     };
 
-    document.getElementById('refreshTopology').addEventListener('click', () => {
-      statusEl.textContent = 'Refreshing…';
-      update();
-    });
-
-    document.getElementById('zoomIn').addEventListener('click', () => {
-      svg.transition().duration(200).call(zoom.scaleBy, 1.2);
-    });
-    document.getElementById('zoomOut').addEventListener('click', () => {
-      svg.transition().duration(200).call(zoom.scaleBy, 0.8);
-    });
-    document.getElementById('zoomReset').addEventListener('click', () => {
-      svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity);
-    });
-
     update();
+    setInterval(update, 6000);
   })();
 </script>
 {% endblock %}

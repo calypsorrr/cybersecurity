@@ -203,7 +203,7 @@
 
       label.append('tspan')
         .attr('x', 0)
-        .text(d => d.hostname || d.label);
+        .text(d => d.hostname || 'Unknown host');
 
       label.append('tspan')
         .attr('x', 0)
@@ -241,6 +241,7 @@
     };
 
     let loading = false;
+    let lastSignature = '';
     const setLoadingState = (state) => {
       loading = state;
       if (refreshBtn) {
@@ -260,8 +261,17 @@
         const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of local traffic. Updated ${updatedAt.toLocaleTimeString()}.`;
         statusEl.textContent = status;
         updateSummary(data);
-        renderTable(data.links || []);
-        renderGraph(data);
+
+        const signature = (data.nodes || []).map(node => `${node.id}|${node.hostname || ''}`)
+          .sort()
+          .join(';');
+        const shouldUpdateGraph = data.changed || signature !== lastSignature;
+        lastSignature = signature;
+
+        if (shouldUpdateGraph) {
+          renderTable(data.links || []);
+          renderGraph(data);
+        }
       } catch (err) {
         statusEl.textContent = 'Unable to load topology data';
         console.error(err);
@@ -271,6 +281,7 @@
     };
 
     update();
+    setInterval(update, 1000);
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => update());
     }

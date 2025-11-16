@@ -164,6 +164,7 @@ class NetworkMonitor:
         self._bandwidth_history: Deque[Dict[str, object]] = deque(maxlen=240)
         self._history_bucket_ts: Optional[int] = None
         self._history_bucket: Optional[Dict[str, object]] = None
+        self._topology_signature: str = ""
 
     # ------------------------------------------------------------------
     # Thread lifecycle
@@ -249,6 +250,14 @@ class NetworkMonitor:
             dst = getattr(packet[Ether], "dst", dst)
 
         size = int(len(packet))
+
+        src_role = _classify_ip_role(src, self._local_ips)
+        dst_role = _classify_ip_role(dst, self._local_ips)
+
+        # Only accumulate traffic that stays within the local or private
+        # address space to keep the topology focused on nearby systems.
+        if src_role not in {"local", "private"} or dst_role not in {"local", "private"}:
+            return
 
         with self._lock:
             self._packet_total += 1
@@ -495,10 +504,17 @@ class NetworkMonitor:
                     links.append({"source": src, "target": dst, "packets": int(count)})
 
             links.sort(key=lambda link: link.get("packets", 0), reverse=True)
+
+            signature_parts = [f"{node_id}|{self._resolve_hostname(node_id)}" for node_id in sorted(node_map)]
+            signature = ";".join(signature_parts)
+            topology_changed = signature != self._topology_signature
+            self._topology_signature = signature
+
             topology = {
                 "nodes": list(node_map.values()),
                 "links": links[:120],
                 "window_seconds": self.window_seconds,
+                "changed": topology_changed,
             }
 
             return {

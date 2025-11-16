@@ -56,6 +56,13 @@
                 <small class="d-block text-muted">Packet telemetry & alerts</small>
               </span>
             </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'network_map' else '' }}" href="{{ url_for('network_map') }}">
+              <span class="sidebar-icon" aria-hidden="true">🗺️</span>
+              <span>
+                <strong>Network map</strong>
+                <small class="d-block text-muted">Topology from live flows</small>
+              </span>
+            </a>
             <a class="nav-link {{ 'active' if (active_page|default('')) == 'wireshark' else '' }}" href="{{ url_for('wireshark_console') }}">
               <span class="sidebar-icon" aria-hidden="true">🦈</span>
               <span>

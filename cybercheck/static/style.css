@@ -519,6 +519,61 @@ body {
   margin-bottom: 0.65rem;
 }
 
+/* =======================================================================
+   Network map view
+   ======================================================================= */
+.topology-canvas {
+  width: 100%;
+  height: 520px;
+  background: radial-gradient(circle at 30% 30%, rgba(37, 99, 235, 0.05), transparent 35%),
+              radial-gradient(circle at 70% 70%, rgba(16, 185, 129, 0.05), transparent 30%),
+              #0f172a;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+.topology-canvas svg { width: 100%; height: 100%; display: block; }
+
+.topology-legend {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #0f172a;
+}
+
+.legend-pill::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-pill.local { background: rgba(37, 99, 235, 0.12); color: #1d4ed8; }
+.legend-pill.local::before { background: #2563eb; }
+.legend-pill.private { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.legend-pill.private::before { background: #16a34a; }
+.legend-pill.public { background: rgba(225, 29, 72, 0.12); color: #be123c; }
+.legend-pill.public::before { background: #e11d48; }
+.legend-pill.unknown { background: rgba(107, 114, 128, 0.12); color: #374151; }
+.legend-pill.unknown::before { background: #6b7280; }
+
+.monitor-table .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+
 .metric-card {
   background: radial-gradient(circle at 20% 20%, rgba(59,130,246,0.08), transparent 35%),
               linear-gradient(180deg, #ffffff, #f8fafc);

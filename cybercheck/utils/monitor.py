@@ -14,6 +14,7 @@ returning useful state to the UI.
 from __future__ import annotations
 
 from collections import Counter, deque
+import ipaddress
 from dataclasses import dataclass
 from datetime import datetime
 import threading
@@ -42,6 +43,18 @@ def _format_counter(counter: Counter, limit: int = 5) -> List[Dict[str, object]]
         {"key": key, "count": int(count)}
         for key, count in counter.most_common(limit)
     ]
+
+
+def _classify_ip_role(ip: str, local_ips: Set[str]) -> str:
+    if ip in local_ips:
+        return "local"
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return "unknown"
+    if addr.is_private:
+        return "private"
+    return "public"
 
 
 def _discover_local_ips() -> Set[str]:
@@ -433,6 +446,27 @@ class NetworkMonitor:
             if self._history_bucket:
                 history.append(dict(self._history_bucket))
 
+            node_map: Dict[str, Dict[str, object]] = {}
+            links: List[Dict[str, object]] = []
+            for src, dsts in self._window_src_unique.items():
+                for dst, count in dsts.most_common(20):
+                    node_map.setdefault(
+                        src,
+                        {"id": src, "label": src, "role": _classify_ip_role(src, self._local_ips)},
+                    )
+                    node_map.setdefault(
+                        dst,
+                        {"id": dst, "label": dst, "role": _classify_ip_role(dst, self._local_ips)},
+                    )
+                    links.append({"source": src, "target": dst, "packets": int(count)})
+
+            links.sort(key=lambda link: link.get("packets", 0), reverse=True)
+            topology = {
+                "nodes": list(node_map.values()),
+                "links": links[:120],
+                "window_seconds": self.window_seconds,
+            }
+
             return {
                 "running": self._running,
                 "interface": self.interface,
@@ -462,6 +496,7 @@ class NetworkMonitor:
                     "port_activity": _format_counter(self._window_port_counter),
                 },
                 "bandwidth_history": history,
+                "topology": topology,
             }
 
 

@@ -16,6 +16,17 @@
       <p>{{ guide.summary }}</p>
     </header>
 
+    {% if guide.steps %}
+    <div class="guide-section">
+      <h3>Quickstart steps</h3>
+      <ol class="guide-steps">
+        {% for step in guide.steps %}
+        <li>{{ step }}</li>
+        {% endfor %}
+      </ol>
+    </div>
+    {% endif %}
+
     <div class="guide-section">
       <h3>Most useful parameters</h3>
       <ul class="list-unstyled guide-flags">
@@ -40,6 +51,20 @@
         {% endfor %}
       </div>
     </div>
+
+    {% if guide.more_commands %}
+    <div class="guide-section">
+      <h3>More CLI snippets</h3>
+      <div class="example-stack">
+        {% for extra in guide.more_commands %}
+        <div class="example">
+          <div class="example-title">{{ extra.label }}</div>
+          <pre><code>{{ extra.cmd }}</code></pre>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
   </article>
   {% endfor %}
 </section>

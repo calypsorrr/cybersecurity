@@ -178,6 +178,58 @@
       </div>
     </div>
 
+    <!-- One-click sweep -->
+    <div class="card shadow-sm mt-4" id="standard-sweep">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <div>
+          <span class="fw-semibold d-block">One-click standard sweep</span>
+          <small class="text-muted">Runs Nmap (standard), Nikto, and Scapy sequentially, saving artifacts.</small>
+        </div>
+        <span class="badge text-bg-primary">Bundle</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/run_standard_suite" class="vstack gap-3" novalidate>
+          <div class="row g-3">
+            <div class="col-12 col-lg-8">
+              <label class="form-label" for="suiteTarget">Target</label>
+              <input id="suiteTarget" class="form-control" name="target" placeholder="host or URL" autocomplete="off" required>
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label" for="suiteUser">Operator</label>
+              <input id="suiteUser" class="form-control" name="user" placeholder="Your name or initials" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="row g-3 align-items-end">
+            <div class="col-12 col-lg-6">
+              <label class="form-label" for="suiteInterface">Capture interface (optional)</label>
+              <input id="suiteInterface" class="form-control" name="capture_interface" placeholder="eth0" autocomplete="off">
+              <div class="form-text">If set, traffic is captured to a PCAP while the sweep runs.</div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <div class="form-check mt-4 pt-1">
+                <input class="form-check-input" type="checkbox" value="1" id="suiteCapture" name="capture_traffic" checked>
+                <label class="form-check-label" for="suiteCapture">
+                  Capture traffic to PCAP
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="suiteToken">Engagement token</label>
+            <input id="suiteToken" class="form-control" name="engagement_token" placeholder="ENGAGEMENT TOKEN (required)" autocomplete="off" required>
+            <div class="form-text">Required to run the active Nmap/Nikto/Scapy bundle.</div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-primary">Run standard sweep</button>
+            <span class="text-muted small align-self-center">Results saved to <code>logs</code> (txt) and optional PCAP.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Non-intrusive -->
     <div class="card shadow-sm mt-4">
       <div class="card-header d-flex align-items-center justify-content-between">
@@ -473,6 +525,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   activeTool.addEventListener('change', toggleActiveOptions);
   toggleActiveOptions();
+
+  // Disable interface field when capture is off for the sweep bundle
+  const suiteCapture   = document.getElementById('suiteCapture');
+  const suiteInterface = document.getElementById('suiteInterface');
+  const toggleCaptureInterface = () => {
+    const enabled = suiteCapture.checked;
+    suiteInterface.toggleAttribute('disabled', !enabled);
+  };
+  suiteCapture.addEventListener('change', toggleCaptureInterface);
+  toggleCaptureInterface();
 });
 </script>
 

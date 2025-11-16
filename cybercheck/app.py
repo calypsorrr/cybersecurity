@@ -1390,6 +1390,30 @@ def api_network_snapshot():
     return jsonify(network_monitor.snapshot())
 
 
+@app.route("/network-map")
+def network_map() -> str:
+    network_monitor.ensure_running()
+    return render_template(
+        "network_map.html",
+        active_page="network_map",
+        window_seconds=network_monitor.window_seconds,
+    )
+
+
+@app.route("/api/network_topology")
+def api_network_topology():
+    network_monitor.ensure_running()
+    snapshot = network_monitor.snapshot()
+    topology = snapshot.get("topology", {"nodes": [], "links": []})
+    topology["metadata"] = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "uptime": snapshot.get("uptime"),
+        "window_seconds": snapshot.get("window", {}).get("seconds"),
+        "packets_in_window": snapshot.get("window", {}).get("packets"),
+    }
+    return jsonify(topology)
+
+
 if __name__ == "__main__":
     # Debug only when explicitly enabled; never hardcode True
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"

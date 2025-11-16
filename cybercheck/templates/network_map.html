@@ -1,0 +1,259 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="page-header">
+  <div>
+    <h1 class="h2 mb-2">Network map</h1>
+    <p class="page-subtitle mb-0">Generate a relationship map from recent local traffic to understand which systems are talking
+to each other. Refresh when you want a new snapshot; only local and private addresses are shown.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-sm btn-outline-primary" id="refreshTopology" type="button">Refresh map</button>
+    <div class="btn-group" role="group" aria-label="Zoom controls">
+      <button class="btn btn-sm btn-outline-secondary" id="zoomOut" type="button">−</button>
+      <button class="btn btn-sm btn-outline-secondary" id="zoomReset" type="button">Reset</button>
+      <button class="btn btn-sm btn-outline-secondary" id="zoomIn" type="button">+</button>
+    </div>
+    <div class="text-end small text-muted ms-2" id="topologyStatus"></div>
+  </div>
+</div>
+
+<div class="row g-4" id="topologySummary">
+  <div class="col-lg-3 col-sm-6">
+    <div class="metric-card">
+      <span class="metric-label">Observed hosts</span>
+      <span class="metric-value" data-field="nodes">—</span>
+      <span class="metric-subtext">Active in the {{ window_seconds }}s window</span>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="metric-card">
+      <span class="metric-label">Connections</span>
+      <span class="metric-value" data-field="links">—</span>
+      <span class="metric-subtext">Unique src → dst edges</span>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="metric-card">
+      <span class="metric-label">Packets in window</span>
+      <span class="metric-value" data-field="packets">—</span>
+      <span class="metric-subtext">Used to build the graph</span>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="metric-card">
+      <span class="metric-label">Monitor uptime</span>
+      <span class="metric-value" data-field="uptime">—</span>
+      <span class="metric-subtext">Since live capture started</span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-xl-8">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3 d-flex justify-content-between align-items-center">
+        <h2 class="h5 mb-0">Topology canvas</h2>
+        <div class="topology-legend" aria-label="Legend">
+          <span class="legend-pill local">Local</span>
+          <span class="legend-pill private">Private</span>
+          <span class="legend-pill public">Public</span>
+          <span class="legend-pill unknown">Unknown</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="topology-canvas" id="topologyCanvas" role="img" aria-label="Network relationships"></div>
+        <p class="text-muted small mb-0">Edges are sized by packet volume; drag nodes to pin interesting systems and watch new flows settle into the map.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-4">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3">
+        <h2 class="h5 mb-0">Connection details</h2>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle monitor-table">
+            <thead>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Destination</th>
+                <th scope="col" class="text-end">Packets</th>
+              </tr>
+            </thead>
+            <tbody id="connectionTable"></tbody>
+          </table>
+        </div>
+        <p class="text-muted small mb-0">Table updates alongside the graph so you can quickly trace who is talking to whom.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<script>
+  (() => {
+    const statusEl = document.getElementById('topologyStatus');
+    const canvas = document.getElementById('topologyCanvas');
+    const tableBody = document.getElementById('connectionTable');
+    const summary = document.getElementById('topologySummary');
+
+    const width = canvas.clientWidth || 720;
+    const height = 640;
+    const svg = d3.select(canvas)
+      .append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    const zoomGroup = svg.append('g');
+    const zoom = d3.zoom()
+      .scaleExtent([0.5, 4])
+      .on('zoom', (event) => {
+        zoomGroup.attr('transform', event.transform);
+      });
+    svg.call(zoom);
+
+    let simulation;
+
+    const formatNumber = (value) => {
+      if (value === null || value === undefined) return '—';
+      if (value > 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+      if (value > 1_000) return `${(value / 1_000).toFixed(1)}k`;
+      return value.toString();
+    };
+
+    const formatUptime = (seconds) => {
+      if (!seconds || seconds < 0) return '—';
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      const parts = [];
+      if (hours) parts.push(`${hours}h`);
+      if (minutes) parts.push(`${minutes}m`);
+      if (!hours && !minutes) parts.push(`${secs}s`);
+      return parts.join(' ');
+    };
+
+    const updateSummary = (data) => {
+      summary.querySelector('[data-field="nodes"]').textContent = formatNumber(data.nodes?.length || 0);
+      summary.querySelector('[data-field="links"]').textContent = formatNumber(data.links?.length || 0);
+      summary.querySelector('[data-field="packets"]').textContent = formatNumber(data.metadata?.packets_in_window || 0);
+      summary.querySelector('[data-field="uptime"]').textContent = formatUptime(data.metadata?.uptime);
+    };
+
+    const colorForRole = (role) => {
+      switch (role) {
+        case 'local': return '#2563eb';
+        case 'private': return '#16a34a';
+        case 'public': return '#e11d48';
+        default: return '#6b7280';
+      }
+    };
+
+    const renderTable = (links) => {
+      tableBody.innerHTML = '';
+      (links || []).slice(0, 25).forEach(link => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><span class="mono">${link.source}</span></td>
+          <td><span class="mono">${link.target}</span></td>
+          <td class="text-end fw-semibold">${formatNumber(link.packets || 0)}</td>
+        `;
+        tableBody.appendChild(row);
+      });
+    };
+
+    const renderGraph = (topology) => {
+      const nodes = (topology.nodes || []).map(d => ({ ...d }));
+      const links = (topology.links || []).map(d => ({ ...d }));
+
+      zoomGroup.selectAll('*').remove();
+
+      const link = zoomGroup.append('g')
+        .attr('stroke', '#cbd5e1')
+        .attr('stroke-opacity', 0.5)
+        .selectAll('line')
+        .data(links)
+        .enter()
+        .append('line')
+        .attr('stroke-width', d => Math.max(1.5, Math.log1p(d.packets || 1)));
+
+      const node = zoomGroup.append('g')
+        .selectAll('circle')
+        .data(nodes)
+        .enter()
+        .append('circle')
+        .attr('r', d => Math.max(8, Math.log1p((d.packets || 6) * 2)))
+        .attr('fill', d => colorForRole(d.role))
+        .attr('stroke', '#0f172a')
+        .attr('stroke-width', 1.5)
+        .call(d3.drag()
+          .on('start', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on('drag', (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on('end', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+          })
+        );
+
+      node.append('title').text(d => `${d.label} (${d.role})`);
+
+      simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(90).strength(0.6))
+        .force('charge', d3.forceManyBody().strength(-220))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .on('tick', () => {
+          link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+          node
+            .attr('cx', d => d.x)
+            .attr('cy', d => d.y);
+        });
+    };
+
+    const update = async () => {
+      try {
+        const response = await fetch('/api/network_topology');
+        const data = await response.json();
+
+        const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of local traffic.`;
+        statusEl.textContent = status;
+        updateSummary(data);
+        renderTable(data.links || []);
+        renderGraph(data);
+      } catch (err) {
+        statusEl.textContent = 'Unable to load topology data';
+        console.error(err);
+      }
+    };
+
+    document.getElementById('refreshTopology').addEventListener('click', () => {
+      statusEl.textContent = 'Refreshing…';
+      update();
+    });
+
+    document.getElementById('zoomIn').addEventListener('click', () => {
+      svg.transition().duration(200).call(zoom.scaleBy, 1.2);
+    });
+    document.getElementById('zoomOut').addEventListener('click', () => {
+      svg.transition().duration(200).call(zoom.scaleBy, 0.8);
+    });
+    document.getElementById('zoomReset').addEventListener('click', () => {
+      svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity);
+    });
+
+    update();
+  })();
+</script>
+{% endblock %}

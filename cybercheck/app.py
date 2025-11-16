@@ -61,6 +61,14 @@ def _coerce_bool(value: Any, default: bool = False) -> bool:
     return text in {"1", "true", "yes", "on"}
 
 
+def _slugify_target(value: str) -> str:
+    """Return a filesystem-friendly token for naming artifacts."""
+
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "_" for ch in value)
+    cleaned = cleaned.strip("._")
+    return cleaned or "target"
+
+
 ETTERCAP_MITM_METHODS = [
     {
         "value": "arp",
@@ -1004,6 +1012,140 @@ def run_appsec_suite():
         "results.html",
         result=res,
         title=title,
+        active_page="home",
+    )
+
+
+@app.route("/run_standard_suite", methods=["POST"])
+def run_standard_suite():
+    """Run the default active trio and persist artifacts for quick baselining."""
+
+    token = request.form.get("engagement_token")
+    if not require_active_session(token or ""):
+        flash("Invalid or missing engagement token. Active scans denied.", "danger")
+        return redirect(url_for("index"))
+
+    target = (request.form.get("target") or "").strip()
+    user = (request.form.get("user") or "operator").strip() or "operator"
+    capture_traffic = _coerce_bool(request.form.get("capture_traffic"), default=True)
+    interface = (request.form.get("capture_interface") or "").strip()
+
+    if not target:
+        flash("Target required for the standard sweep.", "danger")
+        return redirect(url_for("index"))
+
+    started = datetime.now(UTC)
+    slug = _slugify_target(target)
+    logs_dir = BASE_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    report_path = logs_dir / f"standard-suite-{started.strftime('%Y%m%d-%H%M%S')}-{slug}.txt"
+
+    steps: list[dict[str, Any]] = []
+    sniff_started = False
+    sniff_summary: dict[str, Any] | None = None
+    sniff_error: str | None = None
+    pcap_file: str | None = None
+
+    if capture_traffic:
+        if not interface:
+            flash("Interface required to capture packets. Capture skipped.", "warning")
+        else:
+            try:
+                pcap_file = resolve_pcap_output_path(user, f"standard-suite-{slug}.pcap")
+                sniff_resp = background_sniffer.start(
+                    user=user,
+                    interface=interface,
+                    quiet=True,
+                    text_mode=True,
+                    pcap_file=pcap_file,
+                )
+                sniff_started = sniff_resp.get("running", False)
+                sniff_summary = sniff_resp.get("summary")
+            except Exception as exc:  # pragma: no cover - runtime safeguard
+                sniff_error = str(exc)
+                flash(f"Packet capture could not start: {exc}", "warning")
+
+    def _append_step(name: str, run: dict[str, Any]) -> None:
+        preview = (run.get("stdout") or "").splitlines()
+        steps.append(
+            {
+                "name": name,
+                "returncode": run.get("returncode"),
+                "stdout": run.get("stdout") or "",
+                "stderr": run.get("stderr") or "",
+                "started_at": run.get("started_at"),
+                "finished_at": run.get("finished_at"),
+                "preview": "\n".join(preview[:8]),
+            }
+        )
+
+    try:
+        nmap_res = nmap_scan(user=user, target=target, profile="standard", extra_args=["-oN", "-"])
+        _append_step("Nmap (standard)", nmap_res)
+
+        nikto_res = nikto_scan(user=user, target_url=target)
+        _append_step("Nikto", nikto_res)
+
+        scapy_res = scapy_ping_scan(user=user, target=target, count=4, timeout=2.0)
+        _append_step("Scapy ICMP", scapy_res)
+    finally:
+        if sniff_started:
+            stop_result = background_sniffer.stop()
+            if stop_result:
+                sniff_summary = sniff_summary or {}
+                sniff_summary["stopped"] = True
+                sniff_summary["stop_message"] = stop_result.get("message")
+
+    lines: list[str] = []
+    lines.append("# Standard sweep report")
+    lines.append(f"Target: {target}")
+    lines.append(f"Operator: {user}")
+    lines.append(f"Started: {started.isoformat()}")
+    if pcap_file:
+        lines.append(f"PCAP: {pcap_file}")
+    if sniff_error:
+        lines.append(f"Capture warning: {sniff_error}")
+    lines.append("")
+
+    for step in steps:
+        lines.append(f"## {step['name']}")
+        lines.append(f"Return code: {step['returncode']}")
+        if step.get("started_at"):
+            lines.append(f"Started: {step['started_at']}")
+        if step.get("finished_at"):
+            lines.append(f"Finished: {step['finished_at']}")
+        lines.append("-- STDOUT --")
+        lines.append(step.get("stdout") or "(empty)")
+        if step.get("stderr"):
+            lines.append("-- STDERR --")
+            lines.append(step["stderr"])
+        lines.append("")
+
+    with report_path.open("w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
+
+    try:
+        report_display = report_path.relative_to(BASE_DIR)
+    except ValueError:
+        report_display = report_path
+
+    suite_result = {
+        "target": target,
+        "user": user,
+        "report_path": str(report_display),
+        "pcap_path": pcap_file,
+        "started_at": started.isoformat(),
+        "steps": steps,
+        "sniff_summary": sniff_summary,
+        "sniff_error": sniff_error,
+    }
+
+    flash("Standard sweep finished. Logs saved to disk.", "success")
+    return render_template(
+        "results.html",
+        result={"steps": len(steps)},
+        suite_result=suite_result,
+        title=f"Standard sweep: {target}",
         active_page="home",
     )
 

@@ -6,7 +6,7 @@
     <h1 class="h2 mb-2">Network map</h1>
     <p class="page-subtitle mb-0">Generate a relationship map from live packet captures to understand which systems are talking to each other. Keep the page open to watch the topology settle as new flows appear.</p>
   </div>
-  <div class="text-end small text-muted" id="topologyStatus"></div>
+  <div class="text-end small text-muted2" id="topologyStatus"></div>
 </div>
 
 <div class="row g-4" id="topologySummary">
@@ -47,7 +47,7 @@
         <h2 class="h5 mb-0">Topology canvas</h2>
         <div class="d-flex align-items-center gap-3 flex-wrap">
           <div class="d-flex align-items-center gap-2">
-            <label for="interfaceSelect" class="form-label mb-0 small text-muted">Interface</label>
+            <label for="interfaceSelect" class="form-label mb-0 small text-muted2">Interface</label>
             <select id="interfaceSelect" class="form-select form-select-sm" style="min-width: 180px;"></select>
           </div>
           <button id="resetTopologyBtn" type="button" class="btn btn-outline-danger btn-sm">Reset map</button>
@@ -61,7 +61,7 @@
       </div>
       <div class="card-body">
         <div class="topology-canvas" id="topologyCanvas" role="img" aria-label="Network relationships"></div>
-        <p class="text-muted small mb-0">Edges are sized by packet volume; drag nodes to pin interesting systems and watch new flows settle into the map.</p>
+        <p class="text-muted2 small mb-0">Edges are sized by packet volume; drag nodes to pin interesting systems and watch new flows settle into the map.</p>
       </div>
     </div>
   </div>
@@ -83,7 +83,7 @@
             <tbody id="connectionTable"></tbody>
           </table>
         </div>
-        <p class="text-muted small mb-0">Table updates alongside the graph so you can quickly trace who is talking to whom.</p>
+        <p class="text-muted2 small mb-0">Table updates alongside the graph so you can quickly trace who is talking to whom.</p>
       </div>
     </div>
   </div>

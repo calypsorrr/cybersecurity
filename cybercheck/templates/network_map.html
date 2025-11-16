@@ -320,7 +320,10 @@
       loading = state;
     };
 
-    const friendlyInterfaceName = (name) => {
+    const friendlyInterfaceName = (iface) => {
+      const name = typeof iface === 'string' ? iface : iface?.name;
+      const address = typeof iface === 'string' ? null : (iface?.address || iface?.ipv4);
+
       if (!name) return '(default capture)';
 
       const lower = name.toLowerCase();
@@ -338,11 +341,8 @@
         prefix = 'Virtual adapter';
       }
 
-      if (prefix) {
-        return `${prefix} (${name})`;
-      }
-
-      return name;
+      const base = prefix ? `${prefix} (${name})` : name;
+      return address ? `${base} — ${address}` : base;
     };
 
     const loadInterfaces = async () => {
@@ -358,10 +358,13 @@
         defaultOpt.textContent = friendlyInterfaceName('');
         ifaceSelect.appendChild(defaultOpt);
 
-        (data.interfaces || []).forEach(name => {
+        (data.interfaces || []).forEach(iface => {
+          const name = typeof iface === 'string' ? iface : iface?.name;
+          if (!name) return;
+
           const opt = document.createElement('option');
           opt.value = name;
-          opt.textContent = friendlyInterfaceName(name);
+          opt.textContent = friendlyInterfaceName(iface);
           if (data.active && data.active === name) {
             opt.selected = true;
           }

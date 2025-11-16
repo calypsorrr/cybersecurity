@@ -1419,8 +1419,19 @@ def api_network_interfaces():
     Return a list of available capture interfaces and which one is active.
     """
     try:
-        from scapy.all import get_if_list  # type: ignore
-        interfaces = get_if_list()
+        from scapy.all import get_if_addr, get_if_list  # type: ignore
+
+        interfaces = []
+        for iface in get_if_list():
+            try:
+                ip_addr = get_if_addr(iface)
+            except Exception:
+                ip_addr = None
+
+            interfaces.append({
+                "name": iface,
+                "address": ip_addr if ip_addr and ip_addr != "0.0.0.0" else None,
+            })
     except Exception:
         interfaces = []
 

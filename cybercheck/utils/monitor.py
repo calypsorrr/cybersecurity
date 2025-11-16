@@ -142,6 +142,7 @@ class NetworkMonitor:
         self._started_at: Optional[datetime] = None
 
         self._local_ips: Set[str] = _discover_local_ips()
+        self._hostname_cache: Dict[str, str] = {}
 
         self._packet_total = 0
         self._byte_total = 0
@@ -323,6 +324,21 @@ class NetworkMonitor:
         else:
             self._history_bucket["external"] += size
 
+    def _resolve_hostname(self, ip: str) -> str:
+        """Best-effort reverse lookup with caching."""
+
+        if ip in self._hostname_cache:
+            return self._hostname_cache[ip]
+
+        hostname = ip
+        try:
+            hostname = socket.gethostbyaddr(ip)[0]
+        except Exception:
+            pass
+
+        self._hostname_cache[ip] = hostname
+        return hostname
+
     def _prune_window(self, now: float) -> None:
         cutoff = now - self.window_seconds
         while self._window and self._window[0].ts < cutoff:
@@ -448,15 +464,33 @@ class NetworkMonitor:
 
             node_map: Dict[str, Dict[str, object]] = {}
             links: List[Dict[str, object]] = []
+            allowed_roles = {"local", "private"}
+
             for src, dsts in self._window_src_unique.items():
                 for dst, count in dsts.most_common(20):
+                    src_role = _classify_ip_role(src, self._local_ips)
+                    dst_role = _classify_ip_role(dst, self._local_ips)
+
+                    if src_role not in allowed_roles or dst_role not in allowed_roles:
+                        continue
+
                     node_map.setdefault(
                         src,
-                        {"id": src, "label": src, "role": _classify_ip_role(src, self._local_ips)},
+                        {
+                            "id": src,
+                            "label": src,
+                            "hostname": self._resolve_hostname(src),
+                            "role": src_role,
+                        },
                     )
                     node_map.setdefault(
                         dst,
-                        {"id": dst, "label": dst, "role": _classify_ip_role(dst, self._local_ips)},
+                        {
+                            "id": dst,
+                            "label": dst,
+                            "hostname": self._resolve_hostname(dst),
+                            "role": dst_role,
+                        },
                     )
                     links.append({"source": src, "target": dst, "packets": int(count)})
 

@@ -42,14 +42,17 @@
 
 <div class="row g-4 mt-1">
   <div class="col-xl-8">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-header bg-white border-0 pt-4 pb-3 d-flex justify-content-between align-items-center">
+      <div class="card shadow-sm border-0 h-100">
+      <div class="card-header bg-white border-0 pt-4 pb-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
         <h2 class="h5 mb-0">Topology canvas</h2>
-        <div class="topology-legend" aria-label="Legend">
-          <span class="legend-pill local">Local</span>
-          <span class="legend-pill private">Private</span>
-          <span class="legend-pill public">Public</span>
-          <span class="legend-pill unknown">Unknown</span>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <button class="btn btn-sm btn-primary" id="refreshTopology" type="button">Refresh map</button>
+          <div class="topology-legend" aria-label="Legend">
+            <span class="legend-pill local">Local</span>
+            <span class="legend-pill private">Private</span>
+            <span class="legend-pill public">Public</span>
+            <span class="legend-pill unknown">Unknown</span>
+          </div>
         </div>
       </div>
       <div class="card-body">
@@ -89,9 +92,10 @@
     const canvas = document.getElementById('topologyCanvas');
     const tableBody = document.getElementById('connectionTable');
     const summary = document.getElementById('topologySummary');
+    const refreshBtn = document.getElementById('refreshTopology');
 
     const width = canvas.clientWidth || 720;
-    const height = 520;
+    const height = 640;
     const svg = d3.select(canvas)
       .append('svg')
       .attr('viewBox', `0 0 ${width} ${height}`)
@@ -153,7 +157,9 @@
 
       svg.selectAll('*').remove();
 
-      const link = svg.append('g')
+      const zoomLayer = svg.append('g');
+
+      const link = zoomLayer.append('g')
         .attr('stroke', '#cbd5e1')
         .attr('stroke-opacity', 0.5)
         .selectAll('line')
@@ -162,7 +168,7 @@
         .append('line')
         .attr('stroke-width', d => Math.max(1.5, Math.log1p(d.packets || 1)));
 
-      const node = svg.append('g')
+      const node = zoomLayer.append('g')
         .selectAll('circle')
         .data(nodes)
         .enter()
@@ -186,7 +192,32 @@
           })
         );
 
+      const label = zoomLayer.append('g')
+        .selectAll('text')
+        .data(nodes)
+        .enter()
+        .append('text')
+        .attr('class', 'node-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', -14);
+
+      label.append('tspan')
+        .attr('x', 0)
+        .text(d => d.hostname || d.label);
+
+      label.append('tspan')
+        .attr('x', 0)
+        .attr('dy', '1.2em')
+        .attr('class', 'node-label-ip')
+        .text(d => d.label);
+
       node.append('title').text(d => `${d.label} (${d.role})`);
+
+      svg.call(d3.zoom()
+        .scaleExtent([0.5, 3])
+        .on('zoom', (event) => {
+          zoomLayer.attr('transform', event.transform);
+        }));
 
       simulation = d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links).id(d => d.id).distance(90).strength(0.6))
@@ -202,15 +233,31 @@
           node
             .attr('cx', d => d.x)
             .attr('cy', d => d.y);
+
+          label
+            .attr('x', d => d.x)
+            .attr('y', d => d.y);
         });
     };
 
+    let loading = false;
+    const setLoadingState = (state) => {
+      loading = state;
+      if (refreshBtn) {
+        refreshBtn.disabled = state;
+      }
+    };
+
     const update = async () => {
+      if (loading) return;
+      setLoadingState(true);
+      statusEl.textContent = 'Loading topology…';
       try {
         const response = await fetch('/api/network_topology');
         const data = await response.json();
 
-        const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of traffic.`;
+        const updatedAt = new Date();
+        const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of local traffic. Updated ${updatedAt.toLocaleTimeString()}.`;
         statusEl.textContent = status;
         updateSummary(data);
         renderTable(data.links || []);
@@ -218,11 +265,15 @@
       } catch (err) {
         statusEl.textContent = 'Unable to load topology data';
         console.error(err);
+      } finally {
+        setLoadingState(false);
       }
     };
 
     update();
-    setInterval(update, 6000);
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => update());
+    }
   })();
 </script>
 {% endblock %}

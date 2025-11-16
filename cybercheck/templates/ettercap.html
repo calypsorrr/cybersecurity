@@ -23,7 +23,7 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
           <span class="fw-semibold d-block">Unified sniffing & log capture</span>
-          <small class="text-muted">Mirrors <code>ettercap -T -q -i iface</code> with optional targets/plugins.</small>
+          <small class="text-muted2">Mirrors <code>ettercap -T -q -i iface</code> with optional targets/plugins.</small>
         </div>
         <span class="badge text-bg-secondary">Passive</span>
       </div>
@@ -112,9 +112,9 @@
           <div class="d-flex flex-column gap-2">
             <div class="d-flex flex-wrap gap-2">
               <button class="btn btn-primary" data-sniff-button>Start sniffing</button>
-              <span class="text-muted small align-self-center">Results and stdout mirror the Linux CLI.</span>
+              <span class="text-muted2 small align-self-center">Results and stdout mirror the Linux CLI.</span>
             </div>
-            <div id="sniffStatusMessage" class="small text-muted"></div>
+            <div id="sniffStatusMessage" class="small text-muted2"></div>
           </div>
         </form>
       </div>
@@ -124,7 +124,7 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
           <span class="fw-semibold d-block">Active MITM / poisoning</span>
-          <small class="text-muted">ARP, ICMP or DHCP attacks between two targets with plugin support.</small>
+          <small class="text-muted2">ARP, ICMP or DHCP attacks between two targets with plugin support.</small>
         </div>
         <span class="badge text-bg-danger">Intrusive</span>
       </div>
@@ -207,9 +207,9 @@
           <div class="d-flex flex-column gap-2">
             <div class="d-flex flex-wrap gap-2">
               <button class="btn btn-danger" data-mitm-button>Start MITM</button>
-              <span class="text-muted small align-self-center">Identical arguments to the Linux CLI.</span>
+              <span class="text-muted2 small align-self-center">Identical arguments to the Linux CLI.</span>
             </div>
-            <div id="mitmStatusMessage" class="small text-muted"></div>
+            <div id="mitmStatusMessage" class="small text-muted2"></div>
           </div>
         </form>
       </div>
@@ -219,7 +219,7 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
           <span class="fw-semibold d-block">Remote host discovery sweep</span>
-          <small class="text-muted">Use <code>-M arp:remote</code> against broadcast ranges to map a segment.</small>
+          <small class="text-muted2">Use <code>-M arp:remote</code> against broadcast ranges to map a segment.</small>
         </div>
         <span class="badge text-bg-warning text-dark">Active</span>
       </div>
@@ -273,7 +273,7 @@
 
           <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-warning text-dark">Sweep network</button>
-            <span class="text-muted small align-self-center">Captures host list in stdout for auditing.</span>
+            <span class="text-muted2 small align-self-center">Captures host list in stdout for auditing.</span>
           </div>
         </form>
       </div>
@@ -283,7 +283,7 @@
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
           <span class="fw-semibold d-block">Custom CLI wrapper</span>
-          <small class="text-muted">Paste any Ettercap arguments for full parity with Linux.</small>
+          <small class="text-muted2">Paste any Ettercap arguments for full parity with Linux.</small>
         </div>
         <span class="badge text-bg-dark">Power user</span>
       </div>
@@ -326,7 +326,7 @@
 
           <div class="d-flex flex-wrap gap-2">
             <button class="btn btn-secondary">Run custom command</button>
-            <span class="text-muted small align-self-center">Ideal for filters or beta features.</span>
+            <span class="text-muted2 small align-self-center">Ideal for filters or beta features.</span>
           </div>
         </form>
       </div>
@@ -341,7 +341,7 @@
         {% for cap in capabilities %}
           <div class="list-group-item">
             <div class="fw-semibold">{{ cap.title }}</div>
-            <div class="small text-muted">{{ cap.body|safe }}</div>
+            <div class="small text-muted2">{{ cap.body|safe }}</div>
           </div>
         {% endfor %}
       </div>
@@ -350,7 +350,7 @@
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">Target notation primer</div>
       <div class="card-body">
-        <ul class="small text-muted mb-0">
+        <ul class="small text-muted2 mb-0">
           <li><code>//</code> — entire LAN broadcast.</li>
           <li><code>/10.10.0.0/24/</code> — CIDR blocks.</li>
           <li><code>/victim,server/</code> — comma separated host list.</li>
@@ -366,7 +366,7 @@
         {% for method in mitm_methods %}
           <div>
             <div class="fw-semibold">{{ method.label }}</div>
-            <div class="small text-muted">{{ method.summary }}</div>
+            <div class="small text-muted2">{{ method.summary }}</div>
           </div>
         {% endfor %}
       </div>

@@ -50,6 +50,7 @@
             <label for="interfaceSelect" class="form-label mb-0 small text-muted">Interface</label>
             <select id="interfaceSelect" class="form-select form-select-sm" style="min-width: 180px;"></select>
           </div>
+          <button id="resetTopologyBtn" type="button" class="btn btn-outline-danger btn-sm">Reset map</button>
           <div class="topology-legend" aria-label="Legend">
             <span class="legend-pill local">Local</span>
             <span class="legend-pill private">Private</span>
@@ -124,7 +125,7 @@
     let linkForce;
 
     // Track seen node IDs so we know when something is *new*
-    const knownNodeIds = new Set();
+    let knownNodeIds = new Set();
 
     // Zoom stays the same across updates
     svg.call(
@@ -219,9 +220,10 @@
       // Existing nodes by id so we can reuse positions
       const existingById = new Map(nodes.map(n => [n.id, n]));
 
-      // Update existing nodes or add new ones
+      // Update existing nodes or add new ones, never removing previously seen nodes
       incomingNodes.forEach(n => {
         const existing = existingById.get(n.id);
+        knownNodeIds.add(n.id);
         if (existing) {
           existing.label    = n.label;
           existing.hostname = n.hostname;
@@ -234,10 +236,25 @@
         }
       });
 
-      // Rebuild links from latest topology
-      links.length = 0;
+      // Update or append links while preserving existing ones so the map only grows
+      const linkByKey = new Map(links.map(l => [linkKey(l), l]));
+
       incomingLinks.forEach(l => {
-        links.push({ ...l });
+        const key = linkKey(l);
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+
+        const sourceNode = existingById.get(sourceId) || { id: sourceId };
+        const targetNode = existingById.get(targetId) || { id: targetId };
+
+        const existing = linkByKey.get(key);
+        if (existing) {
+          existing.packets = l.packets;
+          existing.source = sourceNode;
+          existing.target = targetNode;
+        } else {
+          links.push({ ...l, source: sourceNode, target: targetNode });
+        }
       });
 
       // ----- Links join -----
@@ -375,6 +392,24 @@
       }
     };
 
+    const resetGraph = () => {
+      nodes = [];
+      links = [];
+      knownNodeIds.clear();
+
+      nodeLayer.selectAll('*').remove();
+      linkLayer.selectAll('*').remove();
+      labelLayer.selectAll('*').remove();
+
+      nodeSel  = nodeLayer.selectAll('circle');
+      linkSel  = linkLayer.selectAll('line');
+      labelSel = labelLayer.selectAll('g');
+
+      simulation.nodes(nodes);
+      linkForce.links(links);
+      simulation.alpha(0.1).restart();
+    };
+
     const update = async () => {
       if (loading) return;
       setLoadingState(true);
@@ -390,19 +425,8 @@
         updateSummary(data);
         renderTable(data.links || []);
 
-        // Only touch the graph if there's at least one new node ID
-        const serverNodeIds = new Set((data.nodes || []).map(n => n.id));
-        let hasNewNode = false;
-        for (const id of serverNodeIds) {
-          if (!knownNodeIds.has(id)) {
-            knownNodeIds.add(id);
-            hasNewNode = true;
-          }
-        }
-
-        if (hasNewNode) {
-          renderGraph(data);
-        }
+        // Always render so new nodes accumulate while existing ones persist
+        renderGraph(data);
       } catch (err) {
         statusEl.textContent = 'Unable to load topology data';
         console.error(err);
@@ -422,26 +446,19 @@
           });
 
           // Reset graph state on interface change
-          nodes = [];
-          links = [];
-          knownNodeIds.clear();
-
-          nodeLayer.selectAll('*').remove();
-          linkLayer.selectAll('*').remove();
-          labelLayer.selectAll('*').remove();
-
-          nodeSel  = nodeLayer.selectAll('circle');
-          linkSel  = linkLayer.selectAll('line');
-          labelSel = labelLayer.selectAll('g');
-
-          simulation.nodes(nodes);
-          linkForce.links(links);
-          simulation.alpha(0.1).restart();
-
+          resetGraph();
           update();
         } catch (err) {
           console.error('Failed to switch interface', err);
         }
+      });
+    }
+
+    const resetButton = document.getElementById('resetTopologyBtn');
+    if (resetButton) {
+      resetButton.addEventListener('click', () => {
+        resetGraph();
+        statusEl.textContent = 'Topology reset. Waiting for new traffic…';
       });
     }
 

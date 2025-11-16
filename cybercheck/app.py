@@ -1413,6 +1413,38 @@ def api_network_topology():
     }
     return jsonify(topology)
 
+@app.route("/api/network_interfaces")
+def api_network_interfaces():
+    """
+    Return a list of available capture interfaces and which one is active.
+    """
+    try:
+        from scapy.all import get_if_list  # type: ignore
+        interfaces = get_if_list()
+    except Exception:
+        interfaces = []
+
+    return jsonify({
+        "interfaces": interfaces,
+        "active": network_monitor.interface,
+    })
+
+
+@app.route("/api/network_interface", methods=["POST"])
+def api_set_network_interface():
+    """
+    Switch the network monitor to a different interface.
+    """
+    payload = request.get_json(silent=True) or {}
+    iface = (payload.get("interface") or "").strip() or None
+
+    # iface = None => default Scapy interface
+    network_monitor.set_interface(iface)
+
+    return jsonify({
+        "interface": network_monitor.interface,
+    })
+
 
 if __name__ == "__main__":
     # Debug only when explicitly enabled; never hardcode True

@@ -549,7 +549,44 @@ class NetworkMonitor:
                 "topology": topology,
             }
 
+    # ------------------------------------------------------------------
+    # Interface switching (NEW)
+    def set_interface(self, interface: Optional[str]) -> None:
+        """
+        Switch the capture interface at runtime.
+
+        Stops the current sniffer thread, updates the interface, refreshes
+        local IP discovery, and restarts the worker.
+        """
+        # No-op if nothing changes
+        if interface == self.interface:
+            return
+
+        # Stop current sniffing thread
+        self.stop()
+
+        # Update interface and refresh local IPs / hostname cache
+        self.interface = interface
+        self._local_ips = _discover_local_ips()
+        self._hostname_cache.clear()
+
+        # Reset topology signature so first snapshot after switch is treated as "changed"
+        self._topology_signature = ""
+
+        # Clear rolling window so you don't see stale flows from old interface
+        with self._lock:
+            self._window.clear()
+            self._window_src.clear()
+            self._window_dst.clear()
+            self._window_port_counter.clear()
+            self._window_bytes = 0
+            self._window_inbound_bytes = 0
+            self._window_outbound_bytes = 0
+            self._window_src_unique.clear()
+
+        # Restart sniffing on the new interface
+        self.ensure_running()
+
 
 # Singleton used by the Flask application
 network_monitor = NetworkMonitor()
-

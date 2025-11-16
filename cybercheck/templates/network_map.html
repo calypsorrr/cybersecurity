@@ -42,10 +42,14 @@
 
 <div class="row g-4 mt-1">
   <div class="col-xl-8">
-      <div class="card shadow-sm border-0 h-100">
+    <div class="card shadow-sm border-0 h-100">
       <div class="card-header bg-white border-0 pt-4 pb-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
         <h2 class="h5 mb-0">Topology canvas</h2>
         <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <label for="interfaceSelect" class="form-label mb-0 small text-muted">Interface</label>
+            <select id="interfaceSelect" class="form-select form-select-sm" style="min-width: 180px;"></select>
+          </div>
           <button class="btn btn-sm btn-primary" id="refreshTopology" type="button">Refresh map</button>
           <div class="topology-legend" aria-label="Legend">
             <span class="legend-pill local">Local</span>
@@ -93,15 +97,68 @@
     const tableBody = document.getElementById('connectionTable');
     const summary = document.getElementById('topologySummary');
     const refreshBtn = document.getElementById('refreshTopology');
+    const ifaceSelect = document.getElementById('interfaceSelect');
 
     const width = canvas.clientWidth || 720;
     const height = 640;
+
     const svg = d3.select(canvas)
       .append('svg')
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
 
+    // --- Persistent layers & state ---
+    const zoomLayer  = svg.append('g');
+    const linkLayer  = zoomLayer.append('g')
+      .attr('stroke', '#cbd5e1')
+      .attr('stroke-opacity', 0.5);
+    const nodeLayer  = zoomLayer.append('g');
+    const labelLayer = zoomLayer.append('g');
+
+    let nodes = [];
+    let links = [];
+
+    let nodeSel  = nodeLayer.selectAll('circle');
+    let linkSel  = linkLayer.selectAll('line');
+    let labelSel = labelLayer.selectAll('g');
+
     let simulation;
+    let linkForce;
+
+    // Track seen node IDs so we know when something is *new*
+    const knownNodeIds = new Set();
+
+    // Zoom stays the same across updates
+    svg.call(
+      d3.zoom()
+        .scaleExtent([0.5, 3])
+        .on('zoom', (event) => {
+          zoomLayer.attr('transform', event.transform);
+        })
+    );
+
+    // Create a single simulation that we reuse
+    simulation = d3.forceSimulation(nodes)
+      .force('link', (linkForce = d3.forceLink(links)
+        .id(d => d.id)
+        .distance(90)
+        .strength(0.6)))
+      .force('charge', d3.forceManyBody().strength(-220))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .on('tick', () => {
+        linkSel
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y);
+
+        nodeSel
+          .attr('cx', d => d.x)
+          .attr('cy', d => d.y);
+
+        labelSel
+          .attr('transform', d => `translate(${d.x},${d.y})`);
+      });
 
     const formatNumber = (value) => {
       if (value === null || value === undefined) return '—';
@@ -151,27 +208,59 @@
       });
     };
 
+    const linkKey = (d) => {
+      const s = typeof d.source === 'object' ? d.source.id : d.source;
+      const t = typeof d.target === 'object' ? d.target.id : d.target;
+      return `${s}->${t}`;
+    };
+
     const renderGraph = (topology) => {
-      const nodes = (topology.nodes || []).map(d => ({ ...d }));
-      const links = (topology.links || []).map(d => ({ ...d }));
+      const incomingNodes = topology.nodes || [];
+      const incomingLinks = topology.links || [];
 
-      svg.selectAll('*').remove();
+      // Existing nodes by id so we can reuse positions
+      const existingById = new Map(nodes.map(n => [n.id, n]));
 
-      const zoomLayer = svg.append('g');
+      // Update existing nodes or add new ones
+      incomingNodes.forEach(n => {
+        const existing = existingById.get(n.id);
+        if (existing) {
+          existing.label    = n.label;
+          existing.hostname = n.hostname;
+          existing.role     = n.role;
+          existing.packets  = n.packets;
+        } else {
+          const nn = { ...n };
+          nodes.push(nn);
+          existingById.set(n.id, nn);
+        }
+      });
 
-      const link = zoomLayer.append('g')
-        .attr('stroke', '#cbd5e1')
-        .attr('stroke-opacity', 0.5)
-        .selectAll('line')
-        .data(links)
-        .enter()
+      // Rebuild links from latest topology
+      links.length = 0;
+      incomingLinks.forEach(l => {
+        links.push({ ...l });
+      });
+
+      // ----- Links join -----
+      linkSel = linkSel
+        .data(links, linkKey);
+
+      linkSel.exit().remove();
+
+      const linkEnter = linkSel.enter()
         .append('line')
         .attr('stroke-width', d => Math.max(1.5, Math.log1p(d.packets || 1)));
 
-      const node = zoomLayer.append('g')
-        .selectAll('circle')
-        .data(nodes)
-        .enter()
+      linkSel = linkEnter.merge(linkSel);
+
+      // ----- Nodes join -----
+      nodeSel = nodeSel
+        .data(nodes, d => d.id);
+
+      nodeSel.exit().remove();
+
+      const nodeEnter = nodeSel.enter()
         .append('circle')
         .attr('r', d => Math.max(8, Math.log1p((d.packets || 6) * 2)))
         .attr('fill', d => colorForRole(d.role))
@@ -192,60 +281,74 @@
           })
         );
 
-      const label = zoomLayer.append('g')
-        .selectAll('text')
-        .data(nodes)
-        .enter()
-        .append('text')
-        .attr('class', 'node-label')
-        .attr('text-anchor', 'middle')
-        .attr('dy', -14);
+      nodeEnter.append('title')
+        .text(d => `${d.label} (${d.role})`);
 
-      label.append('tspan')
-        .attr('x', 0)
+      nodeSel = nodeEnter.merge(nodeSel);
+
+      // ----- Labels join -----
+      labelSel = labelSel
+        .data(nodes, d => d.id);
+
+      labelSel.exit().remove();
+
+      const labelEnter = labelSel.enter()
+        .append('g')
+        .attr('class', 'node-label');
+
+      labelEnter.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', -14)
         .text(d => d.hostname || 'Unknown host');
 
-      label.append('tspan')
-        .attr('x', 0)
-        .attr('dy', '1.2em')
+      labelEnter.append('text')
         .attr('class', 'node-label-ip')
+        .attr('text-anchor', 'middle')
+        .attr('dy', 2)
         .text(d => d.label);
 
-      node.append('title').text(d => `${d.label} (${d.role})`);
+      labelSel = labelEnter.merge(labelSel);
 
-      svg.call(d3.zoom()
-        .scaleExtent([0.5, 3])
-        .on('zoom', (event) => {
-          zoomLayer.attr('transform', event.transform);
-        }));
+      // Update simulation graph
+      simulation.nodes(nodes);
+      linkForce.links(links);
 
-      simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id).distance(90).strength(0.6))
-        .force('charge', d3.forceManyBody().strength(-220))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .on('tick', () => {
-          link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-          node
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
-
-          label
-            .attr('x', d => d.x)
-            .attr('y', d => d.y);
-        });
+      simulation.alpha(0.6).restart();
     };
 
     let loading = false;
-    let lastSignature = '';
+
     const setLoadingState = (state) => {
       loading = state;
       if (refreshBtn) {
         refreshBtn.disabled = state;
+      }
+    };
+
+    const loadInterfaces = async () => {
+      if (!ifaceSelect) return;
+      try {
+        const res = await fetch('/api/network_interfaces');
+        const data = await res.json();
+
+        ifaceSelect.innerHTML = '';
+
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '(default interface)';
+        ifaceSelect.appendChild(defaultOpt);
+
+        (data.interfaces || []).forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          if (data.active && data.active === name) {
+            opt.selected = true;
+          }
+          ifaceSelect.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Failed to load interfaces', err);
       }
     };
 
@@ -260,16 +363,21 @@
         const updatedAt = new Date();
         const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of local traffic. Updated ${updatedAt.toLocaleTimeString()}.`;
         statusEl.textContent = status;
+
         updateSummary(data);
+        renderTable(data.links || []);
 
-        const signature = (data.nodes || []).map(node => `${node.id}|${node.hostname || ''}`)
-          .sort()
-          .join(';');
-        const shouldUpdateGraph = data.changed || signature !== lastSignature;
-        lastSignature = signature;
+        // Only touch the graph if there's at least one new node ID
+        const serverNodeIds = new Set((data.nodes || []).map(n => n.id));
+        let hasNewNode = false;
+        for (const id of serverNodeIds) {
+          if (!knownNodeIds.has(id)) {
+            knownNodeIds.add(id);
+            hasNewNode = true;
+          }
+        }
 
-        if (shouldUpdateGraph) {
-          renderTable(data.links || []);
+        if (hasNewNode) {
           renderGraph(data);
         }
       } catch (err) {
@@ -280,8 +388,44 @@
       }
     };
 
+    if (ifaceSelect) {
+      ifaceSelect.addEventListener('change', async () => {
+        const value = ifaceSelect.value;
+        try {
+          await fetch('/api/network_interface', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interface: value || null }),
+          });
+
+          // Reset graph state on interface change
+          nodes = [];
+          links = [];
+          knownNodeIds.clear();
+
+          nodeLayer.selectAll('*').remove();
+          linkLayer.selectAll('*').remove();
+          labelLayer.selectAll('*').remove();
+
+          nodeSel  = nodeLayer.selectAll('circle');
+          linkSel  = linkLayer.selectAll('line');
+          labelSel = labelLayer.selectAll('g');
+
+          simulation.nodes(nodes);
+          linkForce.links(links);
+          simulation.alpha(0.1).restart();
+
+          update();
+        } catch (err) {
+          console.error('Failed to switch interface', err);
+        }
+      });
+    }
+
     update();
+    loadInterfaces();
     setInterval(update, 1000);
+
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => update());
     }

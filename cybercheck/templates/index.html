@@ -313,6 +313,7 @@
                 <option value="trivy">Trivy (container/IaC)</option>
                 <option value="grype">Grype (SBOM vuln)</option>
                 <option value="checkov">Checkov (IaC posture)</option>
+                <option value="spiderfoot">SpiderFoot (OSINT recon)</option>
                 <option value="volatility">Volatility (memory)</option>
               </select>
             </div>
@@ -337,6 +338,12 @@
               <label class="form-label" for="volPlugin">Volatility plugin</label>
               <input id="volPlugin" class="form-control" name="vol_plugin" value="pslist" placeholder="pslist, netscan, ...">
             </div>
+          </div>
+
+          <div>
+            <label class="form-label" for="spiderModules">SpiderFoot modules (optional)</label>
+            <input id="spiderModules" class="form-control" name="spiderfoot_modules" placeholder="e.g. sfp_dnsresolve,sfp_shodan">
+            <div class="form-text">Comma-separated module list; leave blank to use SpiderFoot defaults.</div>
           </div>
 
           <div class="form-check">

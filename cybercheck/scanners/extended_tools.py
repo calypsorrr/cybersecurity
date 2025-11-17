@@ -76,3 +76,18 @@ def volatility_inspect(*, user: str, target: str, plugin: str = "pslist") -> Dic
     args = ["-f", target, plugin]
     return run_tool(user=user, tool="volatility3", target=target, args=args)
 
+
+def spiderfoot_scan(
+    *,
+    user: str,
+    target: str,
+    modules: Iterable[str] | None = None,
+) -> Dict[str, Any]:
+    """Run SpiderFoot CLI for OSINT-style recon."""
+
+    args: List[str] = ["-s", target, "-q"]
+    if modules:
+        args.extend(["-m", ",".join(modules)])
+
+    return run_tool(user=user, tool="sf", target=target, args=args)
+

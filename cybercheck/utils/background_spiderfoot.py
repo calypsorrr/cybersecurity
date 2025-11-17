@@ -19,6 +19,8 @@ except ImportError:  # pragma: no cover - Python <3.11 fallback
 class BackgroundSpiderfoot:
     """Run SpiderFoot in the background and stream output incrementally."""
 
+    PROGRESS_BASELINE_SECONDS = 240
+
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._runs: Dict[str, Dict[str, Any]] = {}
@@ -101,11 +103,41 @@ class BackgroundSpiderfoot:
                 "modules": state.get("modules", []),
                 "started_at": state.get("started_at"),
                 "finished_at": state.get("finished_at"),
+                "stopped_at": state.get("stopped_at"),
                 "returncode": state.get("returncode"),
                 "stdout": "".join(state.get("stdout_lines", [])),
                 "stderr": "".join(state.get("stderr_lines", [])),
+                "progress": self._progress(state),
             }
             return data
+
+    def stop(self, run_id: str | None) -> bool:
+        """Attempt to stop a running SpiderFoot process."""
+
+        if not run_id:
+            return False
+
+        with self._lock:
+            state = self._runs.get(run_id)
+            if not state:
+                return False
+
+            proc: subprocess.Popen | None = state.get("proc")
+            running = proc is not None and proc.poll() is None
+            if not running:
+                return False
+
+            state["stopped_at"] = datetime.now(UTC).isoformat()
+
+        try:
+            proc.terminate()
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                return False
+
+        return True
 
     def _monitor(self, state: Dict[str, Any]) -> None:
         proc: subprocess.Popen = state["proc"]
@@ -140,6 +172,32 @@ class BackgroundSpiderfoot:
                 pipe.close()
             except Exception:
                 pass
+
+    def _progress(self, state: Dict[str, Any]) -> int:
+        """Estimate progress for a running scan.
+
+        SpiderFoot CLI does not expose granular progress, so we approximate based on
+        elapsed time and cap at 95% until the process exits.
+        """
+
+        if state.get("finished_at"):
+            return 100
+
+        started_at = state.get("started_at")
+        if not started_at:
+            return 0
+
+        try:
+            started_dt = datetime.fromisoformat(started_at)
+        except ValueError:
+            return 0
+
+        elapsed = (datetime.now(UTC) - started_dt).total_seconds()
+        if elapsed <= 0:
+            return 0
+
+        estimate = int((elapsed / self.PROGRESS_BASELINE_SECONDS) * 95)
+        return max(1, min(95, estimate))
 
 
 background_spiderfoot = BackgroundSpiderfoot()

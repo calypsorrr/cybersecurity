@@ -36,6 +36,7 @@ from cybercheck.utils.reporting import build_control_report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
 from cybercheck.utils.background_sniffer import background_sniffer
+from cybercheck.utils.background_spiderfoot import background_spiderfoot
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 
 try:
@@ -49,6 +50,39 @@ BASE_DIR = Path(__file__).resolve().parent
 
 WIRESHARK_CACHE_LIMIT = 6
 WIRESHARK_RUN_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+
+SPIDERFOOT_PRESETS = [
+    {
+        "value": "auto",
+        "label": "Smart defaults",
+        "modules": "",
+        "description": "Let SpiderFoot pick modules based on the target type.",
+    },
+    {
+        "value": "basic",
+        "label": "Basic footprint (faster)",
+        "modules": "sfp_dnsresolve,sfp_dnsbrute,sfp_rdap",
+        "description": "Quick DNS/WHOIS style footprint without heavy third-party calls.",
+    },
+    {
+        "value": "breach",
+        "label": "Infra + breach signals",
+        "modules": "sfp_dnsresolve,sfp_rdap,sfp_abusech,sfp_shodan,sfp_haveibeenpwned",
+        "description": "Adds breach and reputation lookups to the basic footprint.",
+    },
+    {
+        "value": "all",
+        "label": "All modules (slow)",
+        "modules": "all",
+        "description": "SpiderFoot will attempt every module it knows about.",
+    },
+    {
+        "value": "custom",
+        "label": "Custom list",
+        "modules": "",
+        "description": "Bring your own comma-separated modules.",
+    },
+]
 
 
 def _coerce_bool(value: Any, default: bool = False) -> bool:
@@ -689,11 +723,13 @@ def wireshark_cleanup(run_id: str):
 def spiderfoot_console():
     """Dedicated SpiderFoot console for OSINT-style lookups."""
 
-    result: Dict[str, Any] | None = None
+    run_id = request.args.get("run_id") or (request.form.get("run_id") or "").strip()
+    run_status: Dict[str, Any] | None = background_spiderfoot.status(run_id)
     target_value = ""
     target_type = request.form.get("target_type", "domain")
     modules_raw = (request.form.get("spiderfoot_modules") or "").strip()
     user = (request.form.get("user") or "operator").strip() or "operator"
+    preset = request.form.get("spiderfoot_profile", "auto")
 
     lookup_types = [
         {"value": "ip", "label": "IP address", "example": "8.8.8.8"},
@@ -713,33 +749,47 @@ def spiderfoot_console():
         if not target_value:
             flash("Target is required for SpiderFoot lookups.", "danger")
         else:
+            preset_def = next((p for p in SPIDERFOOT_PRESETS if p["value"] == preset), None)
+            if preset_def and preset_def["value"] != "custom":
+                modules_raw = preset_def.get("modules", "")
+
             modules = [m.strip() for m in modules_raw.split(",") if m.strip()]
-            result = spiderfoot_scan(user=user, target=target_value, modules=modules or None)
-            title = f"SpiderFoot: {target_value}"
-            flash("SpiderFoot run started; results below.", "success")
-            return render_template(
-                "spiderfoot.html",
-                result=result,
-                target_value=target_value,
-                target_type=target_type,
-                lookup_types=lookup_types,
-                modules_raw=modules_raw,
-                user=user,
-                title=title,
-                active_page="spiderfoot",
-            )
+
+            try:
+                run_info = background_spiderfoot.start(
+                    user=user,
+                    target=target_value,
+                    target_type=target_type,
+                    modules=modules,
+                )
+                flash("SpiderFoot is running in the background. Live output will stream below.", "success")
+                run_id = run_info.get("run_id")
+                run_status = background_spiderfoot.status(run_id)
+            except Exception as exc:  # pragma: no cover - relies on system binary
+                flash(f"Unable to start SpiderFoot: {exc}", "danger")
 
     return render_template(
         "spiderfoot.html",
-        result=result,
+        run_status=run_status,
+        run_id=run_id,
         target_value=target_value,
         target_type=target_type,
         lookup_types=lookup_types,
         modules_raw=modules_raw,
+        presets=SPIDERFOOT_PRESETS,
+        active_preset=preset,
         user=user,
         title="SpiderFoot OSINT",
         active_page="spiderfoot",
     )
+
+
+@app.route("/spiderfoot/status/<run_id>")
+def spiderfoot_status(run_id: str):
+    data = background_spiderfoot.status(run_id)
+    if not data:
+        return jsonify({"error": "Run not found"}), 404
+    return jsonify(data)
 
 
 @app.route("/ettercap")

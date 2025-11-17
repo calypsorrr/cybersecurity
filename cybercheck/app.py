@@ -65,28 +65,10 @@ SPIDERFOOT_PRESETS = [
         "description": "Quick DNS/WHOIS style footprint without heavy third-party calls.",
     },
     {
-        "value": "infra",
-        "label": "Network surface",
-        "modules": "sfp_dnsresolve,sfp_dnsbrute,sfp_rdap,sfp_ipinfodb,sfp_asnlookup,sfp_geoip,sfp_censys,sfp_rangerecon",
-        "description": "Map the surrounding infrastructure: DNS, WHOIS, ASN, GeoIP, and common range sweeps.",
-    },
-    {
-        "value": "web",
-        "label": "Web surface",
-        "modules": "sfp_dnsresolve,sfp_dnsbrute,sfp_rdap,sfp_sslcert,sfp_crtsh,sfp_spider,sfp_httphdrs,sfp_httpserver",
-        "description": "Follow web links, enumerate certificates, and collect HTTP fingerprints for surface mapping.",
-    },
-    {
         "value": "breach",
         "label": "Infra + breach signals",
         "modules": "sfp_dnsresolve,sfp_rdap,sfp_abusech,sfp_shodan,sfp_haveibeenpwned",
         "description": "Adds breach and reputation lookups to the basic footprint.",
-    },
-    {
-        "value": "deep_leak",
-        "label": "Leak hunter",
-        "modules": "sfp_dnsresolve,sfp_rdap,sfp_haveibeenpwned,sfp_hunterio,sfp_vt,sfp_leakix,sfp_pastebin",
-        "description": "Focus on credential, paste, and threat intel sources. Requires API keys where applicable.",
     },
     {
         "value": "all",
@@ -99,69 +81,6 @@ SPIDERFOOT_PRESETS = [
         "label": "Custom list",
         "modules": "",
         "description": "Bring your own comma-separated modules.",
-    },
-]
-
-SPIDERFOOT_MODULE_BUNDLES = [
-    {
-        "label": "Fast infra sweep",
-        "modules": "sfp_dnsresolve,sfp_dnsbrute,sfp_rdap,sfp_geoip,sfp_asnlookup",
-        "summary": "DNS + WHOIS + GeoIP/ASN for a low-noise surface map.",
-    },
-    {
-        "label": "Cert + ports",
-        "modules": "sfp_sslcert,sfp_crtsh,sfp_certificate_transparency,sfp_shodan,sfp_portscan",
-        "summary": "Harvest certificates and light service fingerprints (needs Shodan key).",
-    },
-    {
-        "label": "Breach & reputation",
-        "modules": "sfp_haveibeenpwned,sfp_abusech,sfp_leakix,sfp_virustotal,sfp_greynoise",
-        "summary": "Enrich with leak databases and threat intelligence feeds.",
-    },
-    {
-        "label": "People & handles",
-        "modules": "sfp_haveibeenpwned,sfp_hunterio,sfp_emailformat,sfp_socialprofiles,sfp_pwnedornot",
-        "summary": "E-mail format discovery, breach checks, and social handle reconnaissance.",
-    },
-    {
-        "label": "Web crawl",
-        "modules": "sfp_spider,sfp_httphdrs,sfp_httpserver,sfp_metadata,sfp_externalid",
-        "summary": "Lightweight spidering with HTTP headers and metadata extraction.",
-    },
-]
-
-SPIDERFOOT_CAPABILITIES = [
-    {
-        "title": "Network surface",
-        "items": [
-            "DNS, WHOIS/RDAP, GeoIP, ASN mapping",
-            "SSL/TLS certificates and transparency logs",
-            "Service banners via Shodan/portscan (with API keys)",
-        ],
-    },
-    {
-        "title": "Web footprint",
-        "items": [
-            "Crawl links and external references",
-            "Capture HTTP headers/servers and metadata",
-            "Discover sub-resources to feed into follow-on modules",
-        ],
-    },
-    {
-        "title": "Leak & reputation",
-        "items": [
-            "HIBP and breach corpuses for accounts",
-            "Abuse/Threat intel (AbuseCH, GreyNoise, VirusTotal, LeakIX)",
-            "Pastebin and credential spray indicators",
-        ],
-    },
-    {
-        "title": "Identity hunting",
-        "items": [
-            "Usernames, emails, names, and social profile checks",
-            "E-mail format discovery for new domains",
-            "Crypto/Bitcoin address pivots",
-        ],
     },
 ]
 
@@ -858,8 +777,6 @@ def spiderfoot_console():
         lookup_types=lookup_types,
         modules_raw=modules_raw,
         presets=SPIDERFOOT_PRESETS,
-        bundles=SPIDERFOOT_MODULE_BUNDLES,
-        capabilities=SPIDERFOOT_CAPABILITIES,
         active_preset=preset,
         user=user,
         title="SpiderFoot OSINT",

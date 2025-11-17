@@ -22,6 +22,7 @@ from cybercheck.scanners.extended_tools import (
     grype_scan,
     checkov_scan,
     volatility_inspect,
+    spiderfoot_scan,
 )
 from cybercheck.scanners.runner import run_tool
 from cybercheck.models.db import (
@@ -684,6 +685,63 @@ def wireshark_cleanup(run_id: str):
     )
 
 
+@app.route("/spiderfoot", methods=["GET", "POST"])
+def spiderfoot_console():
+    """Dedicated SpiderFoot console for OSINT-style lookups."""
+
+    result: Dict[str, Any] | None = None
+    target_value = ""
+    target_type = request.form.get("target_type", "domain")
+    modules_raw = (request.form.get("spiderfoot_modules") or "").strip()
+    user = (request.form.get("user") or "operator").strip() or "operator"
+
+    lookup_types = [
+        {"value": "ip", "label": "IP address", "example": "8.8.8.8"},
+        {"value": "domain", "label": "Domain or sub-domain", "example": "example.com"},
+        {"value": "hostname", "label": "Hostname", "example": "web-01.internal"},
+        {"value": "cidr", "label": "Network subnet (CIDR)", "example": "10.10.0.0/24"},
+        {"value": "asn", "label": "ASN", "example": "AS15169"},
+        {"value": "email", "label": "E-mail address", "example": "user@example.com"},
+        {"value": "phone", "label": "Phone number", "example": "+1-555-0100"},
+        {"value": "username", "label": "Username", "example": "jdoe"},
+        {"value": "person", "label": "Person's name", "example": "Jane Doe"},
+        {"value": "bitcoin", "label": "Bitcoin address", "example": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT"},
+    ]
+
+    if request.method == "POST":
+        target_value = (request.form.get("target_value") or "").strip()
+        if not target_value:
+            flash("Target is required for SpiderFoot lookups.", "danger")
+        else:
+            modules = [m.strip() for m in modules_raw.split(",") if m.strip()]
+            result = spiderfoot_scan(user=user, target=target_value, modules=modules or None)
+            title = f"SpiderFoot: {target_value}"
+            flash("SpiderFoot run started; results below.", "success")
+            return render_template(
+                "spiderfoot.html",
+                result=result,
+                target_value=target_value,
+                target_type=target_type,
+                lookup_types=lookup_types,
+                modules_raw=modules_raw,
+                user=user,
+                title=title,
+                active_page="spiderfoot",
+            )
+
+    return render_template(
+        "spiderfoot.html",
+        result=result,
+        target_value=target_value,
+        target_type=target_type,
+        lookup_types=lookup_types,
+        modules_raw=modules_raw,
+        user=user,
+        title="SpiderFoot OSINT",
+        active_page="spiderfoot",
+    )
+
+
 @app.route("/ettercap")
 def ettercap_console():
     return render_template(
@@ -1004,6 +1062,11 @@ def run_appsec_suite():
         plugin = (request.form.get("vol_plugin") or "pslist").strip() or "pslist"
         res = volatility_inspect(user=user, target=target, plugin=plugin)
         title = f"Volatility ({plugin}): {target}"
+    elif tool == "spiderfoot":
+        raw_modules = request.form.get("spiderfoot_modules")
+        modules = [m.strip() for m in (raw_modules or "").split(",") if m.strip()] or None
+        res = spiderfoot_scan(user=user, target=target, modules=modules)
+        title = f"SpiderFoot: {target}"
     else:
         flash("Unknown tool requested.", "danger")
         return redirect(url_for("index"))

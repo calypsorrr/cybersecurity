@@ -30,6 +30,8 @@ ALLOWED_TOOLS = [
     "checkov",
     # Forensics
     "volatility3",
+    # OSINT
+    "sf",
 ]
 
 # Timeout defaults (seconds)

@@ -34,6 +34,14 @@
             <label class="form-label" for="spiderModules">SpiderFoot modules (optional)</label>
             <input id="spiderModules" class="form-control" name="spiderfoot_modules" placeholder="e.g. sfp_dnsresolve,sfp_shodan" value="{{ modules_raw }}">
             <div class="form-text">Leave blank for SpiderFoot defaults, or restrict to specific modules.</div>
+            {% if bundles %}
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                {% for bundle in bundles %}
+                  <button type="button" class="btn btn-outline-secondary btn-sm spider-bundle" data-modules="{{ bundle.modules }}" title="{{ bundle.summary }}">{{ bundle.label }}</button>
+                {% endfor %}
+              </div>
+              <div class="form-text">Click a bundle to prefill the module list.</div>
+            {% endif %}
           </div>
           <div class="col-12 col-lg-6">
             <label class="form-label" for="spiderPreset">Scan depth</label>
@@ -120,6 +128,25 @@
           <p class="mb-1">Looking for the original multi-tool suite? <a href="{{ url_for('index') }}">Go back to App/API + supply chain.</a></p>
         </div>
       </div>
+      {% if capabilities %}
+        <div class="card shadow-sm mt-3">
+          <div class="card-header fw-semibold">Capability map</div>
+          <div class="card-body small text-muted2">
+            <div class="vstack gap-2">
+              {% for cap in capabilities %}
+                <div>
+                  <div class="fw-semibold">{{ cap.title }}</div>
+                  <ul class="mb-0">
+                    {% for item in cap.items %}
+                      <li>{{ item }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
     </div>
   </div>
 
@@ -149,6 +176,7 @@
       const progressLabel = document.querySelector('#spiderfoot-progress-label');
       const finishedAlert = document.querySelector('#spiderfoot-finished');
       const stopButton = document.querySelector('#spiderfoot-stop');
+      const bundleButtons = document.querySelectorAll('.spider-bundle');
 
       if (spiderPresetSelect && spiderModulesInput) {
         spiderPresetSelect.addEventListener('change', (evt) => {
@@ -157,6 +185,14 @@
           if (option.value !== 'custom') {
             spiderModulesInput.value = modules;
           }
+        });
+      }
+
+      if (bundleButtons && spiderModulesInput) {
+        bundleButtons.forEach((btn) => {
+          btn.addEventListener('click', () => {
+            spiderModulesInput.value = btn.dataset.modules || '';
+          });
         });
       }
 

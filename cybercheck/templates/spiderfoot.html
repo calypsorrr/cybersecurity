@@ -57,7 +57,7 @@
           <div class="card-body">
             <p class="text-muted2 small mb-2">Return code: {{ result.returncode }} · Started: {{ result.started_at }} · Finished: {{ result.finished_at }}</p>
             <h6>Stdout</h6>
-            <pre class="result-pre bg-body-tertiary p-3 rounded">{{ result.stdout or 'No stdout captured.' }}</pre>
+            <pre class="result-pre  bg-body-tertiary p-3 rounded">{{ result.stdout or 'No stdout captured.' }}</pre>
             <h6>Stderr</h6>
             <pre class="result-pre bg-body-tertiary p-3 rounded">{{ result.stderr or 'No stderr captured.' }}</pre>
           </div>

@@ -740,7 +740,6 @@ body.sidebar-open .sidebar-backdrop { opacity: 1; visibility: visible; }
    ======================================================================= */
 .result-pre {
   background: var(--bg-pre);
-  color: var(--fg-pre);
   padding: 12px;
   border-radius: 8px;
   white-space: pre-wrap;

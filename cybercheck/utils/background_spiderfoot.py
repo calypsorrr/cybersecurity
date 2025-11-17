@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import threading
 import uuid
@@ -49,7 +48,6 @@ class BackgroundSpiderfoot:
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
 
         run_id = str(uuid.uuid4())
@@ -62,7 +60,7 @@ class BackgroundSpiderfoot:
             "modules": modules_list,
             "args": args,
             "started_at": started_at,
-            "stdout_lines": [f"[launcher] running: {' '.join(cmd)}\n"],
+            "stdout_lines": [],
             "stderr_lines": [],
         }
 

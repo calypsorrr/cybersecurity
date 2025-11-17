@@ -792,6 +792,14 @@ def spiderfoot_status(run_id: str):
     return jsonify(data)
 
 
+@app.route("/spiderfoot/stop/<run_id>", methods=["POST"])
+def spiderfoot_stop(run_id: str):
+    stopped = background_spiderfoot.stop(run_id)
+    if not stopped:
+        return jsonify({"error": "Run not found or already finished"}), 404
+    return jsonify({"status": "stopped"})
+
+
 @app.route("/ettercap")
 def ettercap_console():
     return render_template(

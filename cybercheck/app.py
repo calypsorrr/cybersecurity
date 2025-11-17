@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, OrderedDict
+import json
 import secrets
 import shlex
 from datetime import datetime
@@ -36,7 +37,11 @@ from cybercheck.utils.reporting import build_control_report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
 from cybercheck.utils.background_sniffer import background_sniffer
-from cybercheck.utils.background_spiderfoot import background_spiderfoot
+from cybercheck.utils.background_spiderfoot import (
+    SPIDERFOOT_CAPABILITIES,
+    SPIDERFOOT_EVENT_GRAPH,
+    background_spiderfoot,
+)
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 
 try:
@@ -69,6 +74,18 @@ SPIDERFOOT_PRESETS = [
         "label": "Infra + breach signals",
         "modules": "sfp_dnsresolve,sfp_rdap,sfp_abusech,sfp_shodan,sfp_haveibeenpwned",
         "description": "Adds breach and reputation lookups to the basic footprint.",
+    },
+    {
+        "value": "crawl",
+        "label": "Web crawl + metadata",
+        "modules": "sfp_spider,sfp_httpheaders,sfp_htmlmeta,sfp_email",
+        "description": "Requests + BeautifulSoup style crawling with URL discovery, headers, cookies, JS, and email scraping.",
+    },
+    {
+        "value": "apis",
+        "label": "Threat intel APIs",
+        "modules": "sfp_shodan,sfp_virustotal,sfp_haveibeenpwned,sfp_abuseipdb,sfp_censys",
+        "description": "Shodan, VirusTotal, HIBP, AbuseIPDB, and Censys enrichments for infra and breaches.",
     },
     {
         "value": "all",
@@ -779,6 +796,8 @@ def spiderfoot_console():
         presets=SPIDERFOOT_PRESETS,
         active_preset=preset,
         user=user,
+        spiderfoot_capabilities=SPIDERFOOT_CAPABILITIES,
+        event_graph=SPIDERFOOT_EVENT_GRAPH,
         title="SpiderFoot OSINT",
         active_page="spiderfoot",
     )
@@ -798,6 +817,20 @@ def spiderfoot_stop(run_id: str):
     if not stopped:
         return jsonify({"error": "Run not found or already finished"}), 404
     return jsonify({"status": "stopped"})
+
+
+@app.route("/spiderfoot/report/<run_id>")
+def spiderfoot_report(run_id: str):
+    """Return a structured JSON report for a SpiderFoot run."""
+
+    report = background_spiderfoot.report(run_id)
+    if not report:
+        return jsonify({"error": "Run not found"}), 404
+
+    payload = json.dumps(report, indent=2)
+    response = app.response_class(payload, mimetype="application/json")
+    response.headers["Content-Disposition"] = f"attachment; filename=spiderfoot-{run_id}.json"
+    return response
 
 
 @app.route("/ettercap")

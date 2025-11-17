@@ -8,6 +8,85 @@ from typing import Any, Dict, Iterable, List
 
 from cybercheck.models.db import log_run
 
+
+SPIDERFOOT_EVENT_GRAPH = [
+    {
+        "module": "sfp_spider",
+        "emits": ["URL_DISCOVERED", "EMAIL_ADDRESS", "HTML_META"],
+        "consumes": ["ROOT_TARGET"],
+        "summary": "Lightweight crawler that pivots off the seed target and extracts URLs, forms, and metadata.",
+    },
+    {
+        "module": "sfp_htmlmeta",
+        "emits": ["PAGE_TITLE", "META_TAG", "TECH_STACK"],
+        "consumes": ["URL_DISCOVERED"],
+        "summary": "Parses HTML metadata, discovers frameworks, and surfaces author/contact hints.",
+    },
+    {
+        "module": "sfp_email",
+        "emits": ["EMAIL_ADDRESS", "PERSON"],
+        "consumes": ["HTML_META", "PAGE_TITLE", "URL_DISCOVERED"],
+        "summary": "Collects e-mail addresses and associated personas from crawled content.",
+    },
+    {
+        "module": "sfp_shodan",
+        "emits": ["OPEN_PORT", "SERVICE", "ATTACK_SURFACE"],
+        "consumes": ["IP_ADDRESS", "IPV6_ADDRESS", "HOSTNAME"],
+        "summary": "Leverages the Shodan API for exposed services and banners.",
+    },
+    {
+        "module": "sfp_virustotal",
+        "emits": ["MALWARE_TAG", "PASSIVE_DNS", "RELATED_IP"],
+        "consumes": ["DOMAIN_NAME", "IP_ADDRESS", "URL_DISCOVERED"],
+        "summary": "Looks up VirusTotal intelligence for domains, IPs, and URLs.",
+    },
+    {
+        "module": "sfp_haveibeenpwned",
+        "emits": ["EMAIL_BREACH", "PASSWORD_REUSE"],
+        "consumes": ["EMAIL_ADDRESS"],
+        "summary": "Checks HaveIBeenPwned for compromise signals tied to e-mail addresses.",
+    },
+    {
+        "module": "sfp_abuseipdb",
+        "emits": ["IP_REPUTATION"],
+        "consumes": ["IP_ADDRESS", "IPV6_ADDRESS"],
+        "summary": "Queries AbuseIPDB for abuse reports on discovered hosts.",
+    },
+    {
+        "module": "sfp_censys",
+        "emits": ["CERTIFICATE", "OPEN_PORT", "SERVICE"],
+        "consumes": ["DOMAIN_NAME", "IP_ADDRESS"],
+        "summary": "Pulls asset data from Censys to enrich infrastructure findings.",
+    },
+]
+
+SPIDERFOOT_CAPABILITIES = [
+    {
+        "key": "crawl",
+        "title": "Web crawling & metadata extraction",
+        "modules": ["sfp_spider", "sfp_htmlmeta", "sfp_email"],
+        "description": "Requests + BeautifulSoup style crawling, link discovery, headers, cookies, JavaScript and email scraping",
+    },
+    {
+        "key": "apis",
+        "title": "API-based enrichments",
+        "modules": ["sfp_shodan", "sfp_virustotal", "sfp_haveibeenpwned", "sfp_abuseipdb", "sfp_censys"],
+        "description": "Pluggable threat intel APIs for infrastructure, malware, breach, and reputation context",
+    },
+    {
+        "key": "events",
+        "title": "Event-driven module system",
+        "modules": [item["module"] for item in SPIDERFOOT_EVENT_GRAPH],
+        "description": "Modules emit events (e.g., IP_ADDRESS_FOUND) that downstream modules subscribe to automatically",
+    },
+    {
+        "key": "reporting",
+        "title": "Report generation",
+        "modules": [],
+        "description": "Package run metadata, modules, and streamed stdout/stderr into a portable JSON report",
+    },
+]
+
 try:
     from datetime import UTC
 except ImportError:  # pragma: no cover - Python <3.11 fallback
@@ -108,8 +187,40 @@ class BackgroundSpiderfoot:
                 "stdout": "".join(state.get("stdout_lines", [])),
                 "stderr": "".join(state.get("stderr_lines", [])),
                 "progress": self._progress(state),
+                "event_graph": SPIDERFOOT_EVENT_GRAPH,
             }
             return data
+
+    def report(self, run_id: str | None) -> Dict[str, Any] | None:
+        """Build a structured report for the given run."""
+
+        status = self.status(run_id)
+        if not status:
+            return None
+
+        with self._lock:
+            state = self._runs.get(run_id or "", {})
+            args = state.get("args", [])
+
+        return {
+            "metadata": {
+                "run_id": status.get("run_id"),
+                "target": status.get("target"),
+                "target_type": status.get("target_type"),
+                "modules": status.get("modules", []),
+                "args": args,
+                "started_at": status.get("started_at"),
+                "finished_at": status.get("finished_at"),
+                "stopped_at": status.get("stopped_at"),
+                "returncode": status.get("returncode"),
+            },
+            "capabilities": SPIDERFOOT_CAPABILITIES,
+            "event_graph": SPIDERFOOT_EVENT_GRAPH,
+            "output": {
+                "stdout": status.get("stdout"),
+                "stderr": status.get("stderr"),
+            },
+        }
 
     def stop(self, run_id: str | None) -> bool:
         """Attempt to stop a running SpiderFoot process."""

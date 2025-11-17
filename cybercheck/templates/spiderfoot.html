@@ -68,6 +68,7 @@
           <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2 flex-wrap">
             <span>Live scan output</span>
             <div class="d-flex align-items-center gap-2">
+              <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('spiderfoot_report', run_id=run_id) }}">Download JSON report</a>
               <button class="btn btn-outline-danger btn-sm {% if not run_status.running %}d-none{% endif %}" id="spiderfoot-stop">Stop SpiderFoot</button>
               <span class="badge bg-secondary" id="spiderfoot-status-pill">{{ 'running' if run_status.running else 'finished' }}</span>
             </div>
@@ -118,6 +119,41 @@
             <li>Crypto searches work best with Bitcoin base58 addresses.</li>
           </ul>
           <p class="mb-1">Looking for the original multi-tool suite? <a href="{{ url_for('index') }}">Go back to App/API + supply chain.</a></p>
+        </div>
+      </div>
+      <div class="card shadow-sm mt-3">
+        <div class="card-header fw-semibold">Modules & event flow</div>
+        <div class="card-body small text-muted2">
+          <p class="mb-2">SpiderFoot modules are event-driven: each plugin emits artefacts (e.g., IP_ADDRESS_FOUND) that downstream plugins subscribe to.</p>
+          {% if spiderfoot_capabilities %}
+            <ul class="mb-3">
+              {% for cap in spiderfoot_capabilities %}
+                <li><strong>{{ cap.title }}</strong>: {{ cap.description }} ({{ cap.modules | join(', ') }})</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if event_graph %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Module</th>
+                    <th>Consumes</th>
+                    <th>Emits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for node in event_graph %}
+                    <tr>
+                      <td class="fw-semibold">{{ node.module }}</td>
+                      <td class="text-break">{{ node.consumes | join(', ') }}</td>
+                      <td class="text-break">{{ node.emits | join(', ') }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>

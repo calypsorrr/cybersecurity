@@ -54,8 +54,6 @@
           <div class="topology-legend" aria-label="Legend">
             <span class="legend-pill local">Local</span>
             <span class="legend-pill private">Private</span>
-            <span class="legend-pill public">Public</span>
-            <span class="legend-pill unknown">Unknown</span>
           </div>
         </div>
       </div>
@@ -124,8 +122,9 @@
     let simulation;
     let linkForce;
 
-    // Track seen node IDs so we know when something is *new*
+    // Track seen node and link IDs so we know when something is *new*
     let knownNodeIds = new Set();
+    let knownLinkKeys = new Set();
 
     // Zoom stays the same across updates
     svg.call(
@@ -217,13 +216,10 @@
       const incomingNodes = topology.nodes || [];
       const incomingLinks = topology.links || [];
 
-      const incomingIds = new Set(incomingNodes.map(n => n.id));
-
-      // Drop any nodes that disappeared from the latest topology snapshot
-      nodes = nodes.filter(n => incomingIds.has(n.id));
-
       // Existing nodes by id so we can reuse positions
       const existingById = new Map(nodes.map(n => [n.id, n]));
+
+      let graphChanged = false;
 
       // Update existing nodes or add new ones, never removing previously seen nodes
       incomingNodes.forEach(n => {
@@ -238,6 +234,7 @@
           const nn = { ...n };
           nodes.push(nn);
           existingById.set(n.id, nn);
+          graphChanged = true;
         }
       });
 
@@ -259,7 +256,10 @@
           existing.target = targetNode;
         } else {
           links.push({ ...l, source: sourceNode, target: targetNode });
+          graphChanged = true;
         }
+
+        knownLinkKeys.add(key);
       });
 
       // ----- Links join -----
@@ -269,10 +269,10 @@
       linkSel.exit().remove();
 
       const linkEnter = linkSel.enter()
-        .append('line')
-        .attr('stroke-width', d => Math.max(1.5, Math.log1p(d.packets || 1)));
+        .append('line');
 
-      linkSel = linkEnter.merge(linkSel);
+      linkSel = linkEnter.merge(linkSel)
+        .attr('stroke-width', d => Math.max(1.5, Math.log1p(d.packets || 1)));
 
       // ----- Nodes join -----
       nodeSel = nodeSel
@@ -282,8 +282,6 @@
 
       const nodeEnter = nodeSel.enter()
         .append('circle')
-        .attr('r', d => Math.max(8, Math.log1p((d.packets || 6) * 2)))
-        .attr('fill', d => colorForRole(d.role))
         .attr('stroke', '#0f172a')
         .attr('stroke-width', 1.5)
         .call(d3.drag()
@@ -304,7 +302,12 @@
       nodeEnter.append('title')
         .text(d => `${d.label} (${d.role})`);
 
-      nodeSel = nodeEnter.merge(nodeSel);
+      nodeSel = nodeEnter.merge(nodeSel)
+        .attr('r', d => Math.max(8, Math.log1p((d.packets || 6) * 2)))
+        .attr('fill', d => colorForRole(d.role));
+
+      nodeSel.select('title')
+        .text(d => `${d.label} (${d.role})`);
 
       // ----- Labels join -----
       labelSel = labelSel
@@ -329,11 +332,19 @@
 
       labelSel = labelEnter.merge(labelSel);
 
+      labelSel.select('text:not(.node-label-ip)')
+        .text(d => d.hostname || 'Unknown host');
+
+      labelSel.select('.node-label-ip')
+        .text(d => d.label);
+
       // Update simulation graph
       simulation.nodes(nodes);
       linkForce.links(links);
 
-      simulation.alpha(0.6).restart();
+      if (graphChanged) {
+        simulation.alpha(0.6).restart();
+      }
     };
 
     let loading = false;
@@ -401,6 +412,7 @@
       nodes = [];
       links = [];
       knownNodeIds.clear();
+      knownLinkKeys.clear();
 
       nodeLayer.selectAll('*').remove();
       linkLayer.selectAll('*').remove();
@@ -427,24 +439,14 @@
         const status = `Graph built from last ${data.metadata?.window_seconds || {{ window_seconds }}}s of local traffic. Updated ${updatedAt.toLocaleTimeString()}.`;
         statusEl.textContent = status;
 
-        updateSummary(data);
         renderTable(data.links || []);
 
-        // Re-render when new nodes appear or existing ones disappear
-        const serverNodeIds = new Set((data.nodes || []).map(n => n.id));
-        let hasNewNode = false;
-        for (const id of serverNodeIds) {
-          if (!knownNodeIds.has(id)) {
-            hasNewNode = true;
-          }
-        }
-
-        const hasRemovedNode = [...knownNodeIds].some(id => !serverNodeIds.has(id));
-        knownNodeIds = serverNodeIds;
-
-        if (hasNewNode || hasRemovedNode) {
-          renderGraph(data);
-        }
+        renderGraph(data);
+        updateSummary({
+          nodes,
+          links,
+          metadata: data.metadata,
+        });
       } catch (err) {
         statusEl.textContent = 'Unable to load topology data';
         console.error(err);
@@ -465,6 +467,7 @@
 
           // Reset graph state on interface change
           resetGraph();
+          statusEl.textContent = 'Switched interface. Refreshing topology…';
           update();
         } catch (err) {
           console.error('Failed to switch interface', err);

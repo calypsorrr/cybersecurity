@@ -36,6 +36,18 @@
             <div class="form-text">Leave blank for SpiderFoot defaults, or restrict to specific modules.</div>
           </div>
           <div class="col-12 col-lg-6">
+            <label class="form-label" for="spiderPreset">Scan depth</label>
+            <select id="spiderPreset" name="spiderfoot_profile" class="form-select">
+              {% for preset in presets %}
+                <option value="{{ preset.value }}" {% if preset.value == active_preset %}selected{% endif %} data-modules="{{ preset.modules }}">{{ preset.label }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Choose between fast/basic runs, breach-heavy checks, or all modules.</div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
             <label class="form-label" for="sfUser">Operator</label>
             <input id="sfUser" class="form-control" name="user" placeholder="Your name or initials" value="{{ user }}">
           </div>
@@ -43,7 +55,7 @@
 
         <div class="d-flex flex-wrap gap-2 align-items-center">
           <button class="btn btn-primary">Run SpiderFoot</button>
-          <span class="text-muted2 small">GUI-like lookups via the CLI runner. Expect longer runs for broad modules.</span>
+          <span class="text-muted2 small">Runs happen in the background; stdout/stderr streams below in real time.</span>
         </div>
       </form>
     </div>
@@ -51,15 +63,24 @@
 
   <div class="row g-3 mt-3">
     <div class="col-12 col-xl-8">
-      {% if result %}
-        <div class="card shadow-sm">
-          <div class="card-header fw-semibold">Scan output</div>
+      {% if run_status %}
+        <div class="card shadow-sm" id="spiderfoot-output" data-run-id="{{ run_id }}">
+          <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+            <span>Live scan output</span>
+            <span class="badge bg-secondary" id="spiderfoot-status-pill">{{ 'running' if run_status.running else 'finished' }}</span>
+          </div>
           <div class="card-body">
-            <p class="text-muted2 small mb-2">Return code: {{ result.returncode }} · Started: {{ result.started_at }} · Finished: {{ result.finished_at }}</p>
+            <div class="text-muted2 small mb-2" id="spiderfoot-meta">
+              {% if run_status.running %}
+                Streaming stdout/stderr... started at {{ run_status.started_at }}.
+              {% else %}
+                Return code: {{ run_status.returncode }} · Started: {{ run_status.started_at }} · Finished: {{ run_status.finished_at }}
+              {% endif %}
+            </div>
             <h6>Stdout</h6>
-            <pre class="result-pre  bg-body-tertiary p-3 rounded">{{ result.stdout or 'No stdout captured.' }}</pre>
+            <pre class="result-pre bg-body-tertiary p-3 rounded" id="spiderfoot-stdout">{{ run_status.stdout or 'Awaiting output...' }}</pre>
             <h6>Stderr</h6>
-            <pre class="result-pre bg-body-tertiary p-3 rounded">{{ result.stderr or 'No stderr captured.' }}</pre>
+            <pre class="result-pre bg-body-tertiary p-3 rounded" id="spiderfoot-stderr">{{ run_status.stderr or 'No stderr yet.' }}</pre>
           </div>
         </div>
       {% else %}
@@ -88,4 +109,80 @@
       </div>
     </div>
   </div>
+
+  {% if presets %}
+    <div class="card mt-3 shadow-sm">
+      <div class="card-header fw-semibold">Presets explained</div>
+      <div class="card-body small text-muted2">
+        <ul class="mb-0">
+          {% for preset in presets %}
+            <li><strong>{{ preset.label }}</strong>: {{ preset.description }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if run_status %}
+    <script>
+      const spiderPresetSelect = document.querySelector('#spiderPreset');
+      const spiderModulesInput = document.querySelector('#spiderModules');
+      const runId = document.querySelector('#spiderfoot-output')?.dataset.runId;
+      const statusPill = document.querySelector('#spiderfoot-status-pill');
+      const meta = document.querySelector('#spiderfoot-meta');
+      const stdoutEl = document.querySelector('#spiderfoot-stdout');
+      const stderrEl = document.querySelector('#spiderfoot-stderr');
+
+      if (spiderPresetSelect && spiderModulesInput) {
+        spiderPresetSelect.addEventListener('change', (evt) => {
+          const option = evt.target.selectedOptions[0];
+          const modules = option?.dataset.modules || '';
+          if (option.value !== 'custom') {
+            spiderModulesInput.value = modules;
+          }
+        });
+      }
+
+      async function pollSpiderfoot() {
+        if (!runId) return;
+        try {
+          const res = await fetch(`${window.location.origin}/spiderfoot/status/${runId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (statusPill) {
+            statusPill.textContent = data.running ? 'running' : 'finished';
+            statusPill.className = `badge bg-${data.running ? 'secondary' : 'success'}`;
+          }
+          if (meta) {
+            meta.textContent = data.running
+              ? `Streaming stdout/stderr... started at ${data.started_at}.`
+              : `Return code: ${data.returncode} · Started: ${data.started_at} · Finished: ${data.finished_at}`;
+          }
+          if (stdoutEl) stdoutEl.textContent = data.stdout || 'Awaiting output...';
+          if (stderrEl) stderrEl.textContent = data.stderr || 'No stderr yet.';
+          if (data.running) {
+            setTimeout(pollSpiderfoot, 2500);
+          }
+        } catch (err) {
+          console.error('Unable to refresh SpiderFoot output', err);
+        }
+      }
+
+      pollSpiderfoot();
+    </script>
+  {% else %}
+    <script>
+      const spiderPresetSelect = document.querySelector('#spiderPreset');
+      const spiderModulesInput = document.querySelector('#spiderModules');
+      if (spiderPresetSelect && spiderModulesInput) {
+        spiderPresetSelect.addEventListener('change', (evt) => {
+          const option = evt.target.selectedOptions[0];
+          const modules = option?.dataset.modules || '';
+          if (option.value !== 'custom') {
+            spiderModulesInput.value = modules;
+          }
+        });
+      }
+    </script>
+  {% endif %}
 {% endblock %}

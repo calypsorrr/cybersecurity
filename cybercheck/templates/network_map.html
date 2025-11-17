@@ -96,6 +96,9 @@
     const summary = document.getElementById('topologySummary');
     const ifaceSelect = document.getElementById('interfaceSelect');
 
+    const STORAGE_KEY = 'cybercheck:network-topology';
+    let preferredInterface = null;
+
     const width = canvas.clientWidth || 720;
     const height = 640;
 
@@ -210,6 +213,68 @@
       const s = typeof d.source === 'object' ? d.source.id : d.source;
       const t = typeof d.target === 'object' ? d.target.id : d.target;
       return `${s}->${t}`;
+    };
+
+    const persistState = (metadata = null) => {
+      try {
+        const payload = {
+          nodes: nodes.map(n => ({
+            id: n.id,
+            label: n.label,
+            hostname: n.hostname,
+            role: n.role,
+            packets: n.packets,
+            x: n.x,
+            y: n.y,
+            vx: n.vx,
+            vy: n.vy,
+            fx: n.fx,
+            fy: n.fy,
+          })),
+          links: links.map(l => ({
+            source: typeof l.source === 'object' ? l.source.id : l.source,
+            target: typeof l.target === 'object' ? l.target.id : l.target,
+            packets: l.packets,
+          })),
+          metadata: metadata ? { ...metadata, cached_at: Date.now() } : null,
+          interface: ifaceSelect?.value || '',
+        };
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (err) {
+        console.warn('Unable to persist topology state', err);
+      }
+    };
+
+    const hydrateFromStorage = () => {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      try {
+        const parsed = JSON.parse(raw);
+        preferredInterface = parsed.interface || null;
+
+        const persistedNodes = (parsed.nodes || []).map(n => ({ ...n }));
+        const persistedLinks = (parsed.links || []).map(l => ({ ...l }));
+
+        renderGraph({ nodes: persistedNodes, links: persistedLinks });
+
+        if (parsed.metadata) {
+          const cachedAt = parsed.metadata.cached_at
+            ? new Date(parsed.metadata.cached_at)
+            : null;
+          const cachedStamp = cachedAt ? cachedAt.toLocaleTimeString() : 'earlier';
+          statusEl.textContent = `Restored cached topology from ${cachedStamp}. Waiting for fresh updates…`;
+        }
+
+        updateSummary({
+          nodes,
+          links,
+          metadata: parsed.metadata,
+        });
+      } catch (err) {
+        console.warn('Failed to restore cached topology', err);
+      }
     };
 
     const renderGraph = (topology) => {
@@ -345,6 +410,8 @@
       if (graphChanged) {
         simulation.alpha(0.6).restart();
       }
+
+      persistState(topology.metadata || null);
     };
 
     let loading = false;
@@ -400,6 +467,8 @@
           opt.textContent = friendlyInterfaceName(iface);
           if (data.active && data.active === name) {
             opt.selected = true;
+          } else if (preferredInterface && preferredInterface === name) {
+            opt.selected = true;
           }
           ifaceSelect.appendChild(opt);
         });
@@ -413,6 +482,8 @@
       links = [];
       knownNodeIds.clear();
       knownLinkKeys.clear();
+
+      localStorage.removeItem(STORAGE_KEY);
 
       nodeLayer.selectAll('*').remove();
       linkLayer.selectAll('*').remove();
@@ -468,6 +539,7 @@
           // Reset graph state on interface change
           resetGraph();
           statusEl.textContent = 'Switched interface. Refreshing topology…';
+          persistState();
           update();
         } catch (err) {
           console.error('Failed to switch interface', err);
@@ -483,6 +555,7 @@
       });
     }
 
+    hydrateFromStorage();
     update();
     loadInterfaces();
     setInterval(update, 1000);

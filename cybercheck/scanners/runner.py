@@ -1,3 +1,11 @@
+"""Thin wrapper around subprocess to run CLI tools with audit logging.
+
+The runner centralizes execution for supported scanners so that every call
+captures stdout/stderr, timestamps, and return codes in the SQLite database.
+That keeps the Flask routes focused on validation and rendering while this
+module owns the boring-but-critical bookkeeping.
+"""
+
 import subprocess
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -12,6 +20,14 @@ from cybercheck.models.db import log_run
 
 
 def run_tool(user: str, tool: str, target: str, args: List[str], timeout: Optional[int] = None) -> Dict[str, Any]:
+    """Execute a whitelisted CLI tool and persist the run details.
+
+    The function is intentionally small: validate the tool, normalize the
+    arguments, execute the process, and always emit a structured record via
+    ``log_run`` regardless of success, failure, or timeout.  That predictable
+    lifecycle makes it safe for the Flask routes to rely on a single codepath
+    for telemetry and error reporting.
+    """
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool not allowed: {tool}")
 
@@ -62,6 +78,8 @@ def run_tool(user: str, tool: str, target: str, args: List[str], timeout: Option
         )
         return {"error": "timeout", "stderr": str(e), "started_at": started, "finished_at": finished}
     except Exception as e:
+        # Catch-all to make sure the run is still recorded even if an
+        # unexpected exception occurs before the subprocess starts or returns.
         finished = datetime.now(UTC).isoformat()
         log_run(
             user=user,

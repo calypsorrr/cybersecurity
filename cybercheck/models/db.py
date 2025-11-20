@@ -1,3 +1,5 @@
+"""SQLite helpers for storing scan telemetry and reference data."""
+
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -16,12 +18,14 @@ except ImportError:
 
 
 def get_conn() -> sqlite3.Connection:
+    """Open a SQLite connection configured with Row objects."""
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db() -> None:
+    """Create database tables and seed reference data if missing."""
     conn = get_conn()
     cur = conn.cursor()
     cur.executescript(
@@ -91,6 +95,7 @@ def init_db() -> None:
 
 
 def seed_reference_data(conn: sqlite3.Connection) -> None:
+    """Populate base assets, controls, and mappings on a new database."""
     cur = conn.cursor()
 
     if cur.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 0:

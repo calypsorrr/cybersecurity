@@ -11,6 +11,7 @@ from email.message import Message
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Dict, List, Tuple
+from urllib.parse import urlparse
 
 
 ReadableIssue = Dict[str, str]
@@ -168,9 +169,12 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
     message: Message = message_from_string(raw_email)
     issues: List[ReadableIssue] = []
 
-    from_addr = parseaddr(message.get("From", ""))[1]
-    reply_to = parseaddr(message.get("Reply-To", ""))[1]
+    from_display, from_addr = parseaddr(message.get("From", ""))
+    _, reply_to = parseaddr(message.get("Reply-To", ""))
     subject = message.get("Subject", "").strip()
+
+    from_domain = from_addr.split("@")[-1].lower() if "@" in from_addr else ""
+    reply_domain = reply_to.split("@")[-1].lower() if "@" in reply_to else ""
 
     if not from_addr:
         _append_issue(issues, "Missing From", "Sender header is empty or malformed.", "header")
@@ -182,10 +186,38 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
             "header",
             f"From: {from_addr} | Reply-To: {reply_to}",
         )
+        risky_tlds = {"ru", "su", "cn", "top", "xyz", "biz"}
+        from_root = ".".join(from_domain.split(".")[-2:]) if "." in from_domain else from_domain
+        reply_root = ".".join(reply_domain.split(".")[-2:]) if "." in reply_domain else reply_domain
+        if reply_root and reply_root != from_root and reply_root.split(".")[-1] in risky_tlds:
+            _append_issue(
+                issues,
+                "Foreign Reply-To domain",
+                "Reply-To routes to a different high-risk domain, common in fraud.",
+                "header",
+                f"From domain: {from_domain or 'unknown'} | Reply-To domain: {reply_domain}",
+            )
     if not subject:
         _append_issue(issues, "Empty subject", "Messages without a subject are suspicious.", "header")
 
+    display_domains = re.findall(r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}", from_display)
+    if from_display and from_domain:
+        for disp_domain in display_domains:
+            if from_domain not in disp_domain.lower():
+                _append_issue(
+                    issues,
+                    "Display name/domain mismatch",
+                    "Display name implies a different sender domain than the actual address.",
+                    "header",
+                    f"Display: {from_display} | Actual: {from_addr}",
+                )
+                break
+
+    priority_headers = [message.get("X-Priority", ""), message.get("Priority", ""), message.get("Importance", "")]
+    is_high_priority = any(re.search(r"(1|high|urgent)", header or "", flags=re.IGNORECASE) for header in priority_headers)
+
     body_chunks: List[str] = []
+    attachment_names: List[str] = []
     if message.is_multipart():
         for part in message.walk():
             if part.get_content_maintype() == "multipart":
@@ -200,6 +232,7 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
             except LookupError:
                 body_chunks.append(payload.decode("utf-8", errors="ignore"))
             if part.get_filename():
+                attachment_names.append(part.get_filename())
                 _append_issue(
                     issues,
                     "Attachment present",
@@ -211,21 +244,63 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
 
     body_text = "\n".join(body_chunks)
 
-    phishing_keywords = ["urgent", "verify", "password", "wire", "gift card", "invoice", "payment"]
+    phishing_keywords = ["verify", "password", "wire", "gift card", "invoice", "payment"]
     for keyword in phishing_keywords:
         for match in re.finditer(keyword, body_text, flags=re.IGNORECASE):
             snippet = _extract_text_window(body_text, match)
             _append_issue(issues, "Phishing language", f"Keyword '{keyword}' found.", "body", snippet)
 
+    threatening_patterns = [
+        r"\burgent\b",
+        r"\bimmediately\b",
+        r"account (?:locked|suspended|closed)",
+        r"legal action",
+        r"final notice",
+        r"respond within",
+    ]
+    for pattern in threatening_patterns:
+        for match in re.finditer(pattern, body_text, flags=re.IGNORECASE):
+            snippet = _extract_text_window(body_text, match)
+            _append_issue(
+                issues,
+                "Urgent/threatening language",
+                "Email tone pressures the reader with urgency or threats.",
+                "body",
+                snippet,
+            )
+
     for link in re.finditer(r"https?://[\w\.-]+", body_text):
         snippet = _extract_text_window(body_text, link, radius=40)
         _append_issue(issues, "Link present", "Email contains external link(s); verify destinations.", "body", snippet)
+
+    for anchor in re.finditer(r"<a [^>]*href=[\"']([^\"'>\s]+)[\"'][^>]*>(.*?)</a>", body_text, flags=re.IGNORECASE | re.DOTALL):
+        href = anchor.group(1).strip()
+        anchor_text = re.sub(r"\s+", " ", anchor.group(2)).strip()
+        if re.search(r"https?://", anchor_text):
+            href_domain = urlparse(href).netloc.lower()
+            text_domain = urlparse(anchor_text).netloc.lower()
+            if href_domain and text_domain and href_domain != text_domain:
+                _append_issue(
+                    issues,
+                    "Misleading hyperlink",
+                    "Link text implies a trusted site but points elsewhere.",
+                    "body",
+                    f"Text: {anchor_text} -> {href}",
+                )
 
     metadata = {
         "from": from_addr or "Unknown",
         "reply_to": reply_to or "Not provided",
         "subject": subject or "(none)",
     }
+
+    if is_high_priority and any("invoice" in (name or "").lower() for name in attachment_names):
+        _append_issue(
+            issues,
+            "High-priority invoice attachment",
+            "Message marked high priority while carrying an invoice-named attachment.",
+            "attachment",
+        )
 
     risk_level = "info"
     if len(issues) >= 4:

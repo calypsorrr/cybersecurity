@@ -69,3 +69,24 @@ def test_email_analysis_flags_priority_invoice_attachment():
     issue_types = {issue["type"] for issue in result["issues"]}
     assert "High-priority invoice attachment" in issue_types
     assert "Attachment present" in issue_types
+
+
+def test_uploaded_file_detects_truncated_image_body():
+    payload = b"\xff\xd8\xff" + b"\x00" * 20  # JPEG header without end marker
+
+    result = analyze_uploaded_file("photo.jpg", payload)
+
+    issue_types = {issue["type"] for issue in result["issues"]}
+    assert "Corrupted media body" in issue_types
+    assert result["risk_level"] in {"medium", "high"}
+
+
+def test_uploaded_file_flags_html_polyglot_and_metadata():
+    polyglot = b"\xff\xd8\xff" + b"JFIF\x00" + b"<html><script>alert(1)</script></html>" + b"\xff\xd9"
+
+    result = analyze_uploaded_file("avatar.jpeg", polyglot)
+
+    issue_types = {issue["type"] for issue in result["issues"]}
+    assert "Embedded HTML content" in issue_types
+    assert "Embedded script tag" in issue_types
+    assert "JFIF segment present" in result["metadata"]["metadata_flags"]

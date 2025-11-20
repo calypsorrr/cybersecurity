@@ -77,20 +77,6 @@ def analyze_uploaded_file(filename: str, data: bytes) -> InspectionReport:
 
     issues: List[ReadableIssue] = []
     ext = Path(filename).suffix
-
-    if ext.lower() == ".eml":
-        try:
-            email_text = data.decode("utf-8")
-        except UnicodeDecodeError:
-            email_text = data.decode("latin-1", errors="ignore")
-
-        email_report = analyze_email_text(email_text)
-        email_report["label"] = f"Email file: {Path(filename).name}"
-        email_report.setdefault("metadata", {})
-        email_report["metadata"].update(
-            {"filename": Path(filename).name, "size_bytes": len(data)}
-        )
-        return email_report
     declared_type, _ = mimetypes.guess_type(filename)
     detected_header = _fingerprint_header(data)
     header_family = detected_header.split(" ")[0].lower()

@@ -26,18 +26,3 @@ def test_email_analysis_detects_phishing_signals():
     assert "Phishing language" in issue_types
     assert "Link present" in issue_types
     assert result["risk_level"] == "high"
-
-
-def test_eml_file_routes_through_email_analysis():
-    raw_email = (
-        "From: sender@example.com\n"
-        "Reply-To: scams@evil.com\n"
-        "Subject: Alert\n\n"
-        "Please verify your payment."
-    )
-
-    report = analyze_uploaded_file("message.eml", raw_email.encode("utf-8"))
-
-    assert report["label"].startswith("Email file: message.eml")
-    assert report["metadata"]["filename"] == "message.eml"
-    assert any(issue["type"] == "Reply-To mismatch" for issue in report["issues"])

@@ -21,6 +21,13 @@ InspectionReport = Dict[str, object]
 def _fingerprint_header(data: bytes) -> str:
     """Return a human label for known magic numbers."""
 
+    trimmed = data.lstrip()
+    if trimmed.startswith(b"<!DOCTYPE html") or trimmed.startswith(b"<html"):
+        return "HTML document header"
+    if trimmed.startswith(b"<?xml"):
+        return "XML document header"
+    if trimmed.startswith(b"%PDF"):
+        return "PDF document header"
     if data.startswith(b"\xff\xd8\xff"):
         return "JPEG image header"
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -60,6 +67,72 @@ def _extension_family(ext: str) -> str:
     return media_map.get(ext.lower(), "other")
 
 
+def _detect_media_integrity(data: bytes, ext: str, detected_header: str) -> List[ReadableIssue]:
+    """Validate that common media containers look structurally sound."""
+
+    issues: List[ReadableIssue] = []
+    lower_header = detected_header.lower()
+    lower_ext = ext.lower()
+
+    if "jpeg" in lower_header or lower_ext in {".jpg", ".jpeg"}:
+        if not data.rstrip().endswith(b"\xff\xd9"):
+            _append_issue(
+                issues,
+                "Corrupted media body",
+                "JPEG stream missing end-of-image marker; file may be truncated.",
+                "content",
+            )
+    if "png" in lower_header or lower_ext == ".png":
+        if b"IEND" not in data[-32:]:
+            _append_issue(
+                issues,
+                "Corrupted media body",
+                "PNG container missing IEND trailer; body looks incomplete.",
+                "content",
+            )
+    if "gif" in lower_header or lower_ext == ".gif":
+        if not data.rstrip().endswith(b"\x3b"):
+            _append_issue(
+                issues,
+                "Corrupted media body",
+                "GIF file missing terminator byte (0x3B); decode may fail.",
+                "content",
+            )
+    if "mp4" in lower_header or lower_ext in {".mp4", ".mov"}:
+        if b"moov" not in data[:4096].lower() and b"mdat" not in data.lower():
+            _append_issue(
+                issues,
+                "Suspicious container",
+                "MP4 container missing moov/mdat atoms; could be malformed or polyglot.",
+                "content",
+            )
+
+    return issues
+
+
+def _find_secondary_signatures(data: bytes) -> List[ReadableIssue]:
+    """Search for hidden/embedded formats beyond the leading header."""
+
+    issues: List[ReadableIssue] = []
+
+    if b"PK\x03\x04" in data[1:]:
+        _append_issue(
+            issues,
+            "Embedded archive",
+            "ZIP header found deeper in the file; may be a polyglot payload.",
+            "content",
+        )
+    if b"%PDF" in data[1:]:
+        _append_issue(
+            issues,
+            "Embedded document",
+            "PDF signature present alongside other content; review for polyglot tricks.",
+            "content",
+        )
+
+    return issues
+
+
 def _append_issue(issues: List[ReadableIssue], issue_type: str, description: str, location: str, evidence: str | None = None) -> None:
     payload = {"type": issue_type, "description": description, "location": location}
     if evidence:
@@ -82,6 +155,8 @@ def analyze_uploaded_file(filename: str, data: bytes) -> InspectionReport:
     detected_header = _fingerprint_header(data)
     header_family = detected_header.split(" ")[0].lower()
 
+    issues.extend(_find_secondary_signatures(data))
+
     if ext:
         family = _extension_family(ext)
         if family in {"image", "audio", "video"} and "header" in detected_header and family not in detected_header.lower():
@@ -100,6 +175,33 @@ def analyze_uploaded_file(filename: str, data: bytes) -> InspectionReport:
             )
 
     ascii_text = "".join(chr(b) if 32 <= b <= 126 else " " for b in data)
+    for issue in _detect_media_integrity(data, ext, detected_header):
+        issues.append(issue)
+
+    html_match = re.search(r"<!DOCTYPE html|<html", ascii_text, flags=re.IGNORECASE)
+    if html_match and header_family not in {"html", "unknown"}:
+        snippet = _extract_text_window(ascii_text, html_match)
+        _append_issue(
+            issues,
+            "Embedded HTML content",
+            "Binary content also contains HTML markup; could be a polyglot payload.",
+            "content",
+            snippet,
+        )
+
+    metadata_flags: List[str] = []
+    if b"Exif" in data[:2048]:
+        metadata_flags.append("EXIF metadata present")
+    if b"JFIF" in data[:64]:
+        metadata_flags.append("JFIF segment present")
+    if b"ID3" in data[:10]:
+        metadata_flags.append("ID3 audio tags present")
+    if b"ftyp" in data[:64]:
+        metadata_flags.append("MP4/ISO base media brand detected")
+    if re.search(r"<meta ", ascii_text, flags=re.IGNORECASE):
+        metadata_flags.append("HTML meta tags present")
+
+    metadata_flags = metadata_flags or ["None detected"]
     suspicious_patterns: List[Tuple[re.Pattern[str], str]] = [
         (re.compile(r"<\s*script", re.IGNORECASE), "Embedded script tag"),
         (re.compile(r"javascript:\s*", re.IGNORECASE), "JavaScript URI found"),
@@ -137,6 +239,7 @@ def analyze_uploaded_file(filename: str, data: bytes) -> InspectionReport:
         "size_bytes": len(data),
         "declared_type": declared_type or "Unknown",
         "detected_header": detected_header,
+        "metadata_flags": metadata_flags,
     }
 
     critical_types = {"Executable masquerading as media", "Embedded script tag", "Command execution keywords"}

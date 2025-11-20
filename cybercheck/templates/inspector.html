@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Payload inspector</h1>
+    <p class="text-muted mb-0">Upload media files or paste raw emails to scan headers and content for malicious intent.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5">Submit payload</h2>
+        <p class="text-muted">Supports video, audio, images, or raw RFC822 email text. Only one upload is required.</p>
+        <form method="post" enctype="multipart/form-data" class="mt-3" data-no-overlay="true">
+          <div class="mb-3">
+            <label for="payload_file" class="form-label">File upload</label>
+            <input class="form-control" type="file" id="payload_file" name="payload_file"
+                   accept="video/*,audio/*,image/*,.eml,.txt,.wav,.mp3,.mp4,.mov,.avi">
+            <div class="form-text">Media headers are validated against file type and checked for embedded scripts.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="email_raw" class="form-label">Raw email (optional)</label>
+            <textarea class="form-control" id="email_raw" name="email_raw" rows="8"
+                      placeholder="Paste full email headers and body here..."></textarea>
+            <div class="form-text">Looks for phishing language, header mismatches, links, and attachments.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Inspect payload</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h2 class="h5 mb-0">Results</h2>
+          <span class="badge text-bg-secondary">Header + body analysis</span>
+        </div>
+
+        {% if results %}
+          <div class="vstack gap-3">
+            {% for result in results %}
+              <div class="border rounded p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="fw-semibold">{{ result.label }}</div>
+                  {% if result.risk_level == 'high' %}
+                    <span class="badge text-bg-danger">High risk</span>
+                  {% elif result.risk_level == 'medium' %}
+                    <span class="badge text-bg-warning text-dark">Medium risk</span>
+                  {% else %}
+                    <span class="badge text-bg-success">Informational</span>
+                  {% endif %}
+                </div>
+                <p class="text-muted small mb-2">{{ result.summary }}</p>
+
+                <dl class="row small mb-3">
+                  {% for key, value in result.metadata.items() %}
+                    <dt class="col-sm-4 text-muted text-uppercase">{{ key.replace('_', ' ') }}</dt>
+                    <dd class="col-sm-8 mb-1">{{ value }}</dd>
+                  {% endfor %}
+                </dl>
+
+                {% if result.issues %}
+                  <div class="list-group list-group-flush">
+                    {% for issue in result.issues %}
+                      <div class="list-group-item px-0">
+                        <div class="fw-semibold">{{ issue.type }}</div>
+                        <div class="text-muted small">Location: {{ issue.location }}</div>
+                        <div class="small">{{ issue.description }}</div>
+                        {% if issue.evidence %}
+                          <pre class="mt-2 mb-0 small bg-light p-2 rounded border result-pre">{{ issue.evidence }}</pre>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="alert alert-success mb-0">No issues detected in this payload.</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">Submit a payload to see inspection results.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

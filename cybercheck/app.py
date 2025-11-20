@@ -42,6 +42,7 @@ from cybercheck.utils.background_spiderfoot import (
     SPIDERFOOT_EVENT_GRAPH,
     background_spiderfoot,
 )
+from cybercheck.utils.inspector import analyze_email_text, analyze_uploaded_file
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 
 try:
@@ -612,6 +613,40 @@ def scan_help():
         guides=scan_guides,
         decision_matrix=decision_matrix,
         nmap_profiles=NMAP_PROFILES,
+    )
+
+
+@app.route("/payload-inspector", methods=["GET", "POST"])
+def payload_inspector():
+    results = []
+
+    if request.method == "POST":
+        uploaded = request.files.get("payload_file")
+        email_raw = (request.form.get("email_raw") or "").strip()
+
+        if uploaded and uploaded.filename:
+            results.append(analyze_uploaded_file(uploaded.filename, uploaded.read()))
+
+        if email_raw:
+            results.append(analyze_email_text(email_raw))
+
+        if not results:
+            flash("Upload a file or paste an email to inspect.", "warning")
+            return redirect(url_for("payload_inspector"))
+
+        risk_rank = {"info": 0, "medium": 1, "high": 2}
+        highest_risk = max((risk_rank.get(r.get("risk_level", "info"), 0) for r in results), default=0)
+        if highest_risk >= 2:
+            flash("Potentially malicious traits detected.", "danger")
+        elif highest_risk == 1:
+            flash("Review the findings below before trusting this payload.", "warning")
+        else:
+            flash("No obvious threats detected, but manual verification is recommended.", "info")
+
+    return render_template(
+        "inspector.html",
+        active_page="inspector",
+        results=results,
     )
 
 

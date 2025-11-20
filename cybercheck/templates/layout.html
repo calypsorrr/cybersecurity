@@ -84,6 +84,13 @@
                 <small class="d-block text-muted">Domains, IPs, people & crypto</small>
               </span>
             </a>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'inspector' else '' }}" href="{{ url_for('payload_inspector') }}">
+              <span class="sidebar-icon" aria-hidden="true">🛡️</span>
+              <span>
+                <strong>Payload inspector</strong>
+                <small class="d-block text-muted">Media & email safety review</small>
+              </span>
+            </a>
             <a class="nav-link {{ 'active' if (active_page|default('')) == 'scan_help' else '' }}" href="{{ url_for('scan_help') }}">
               <span class="sidebar-icon" aria-hidden="true">📘</span>
               <span>

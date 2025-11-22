@@ -297,15 +297,6 @@ def index():
     )
 
 
-@app.route("/security-ops")
-def security_ops():
-    return render_template(
-        "security_ops.html",
-        active_page="security_ops",
-        user=current_user(),
-    )
-
-
 # ---- Authentication and RBAC ----
 @app.route("/auth/bootstrap", methods=["POST"])
 def auth_bootstrap():

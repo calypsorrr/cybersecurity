@@ -1,0 +1,145 @@
+{% extends 'layout.html' %}
+{% block body %}
+<div class="row g-4 align-items-stretch">
+  <div class="col-12">
+    <div class="card shadow-sm h-100">
+      <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+          <h1 class="h4 mb-1">Firewall testing</h1>
+          <p class="text-muted2 mb-0">Targeted regressions and one-click pentests focused solely on firewall behaviour.</p>
+        </div>
+        {% if user %}
+        <span class="badge text-bg-success">Signed in as {{ user.username }} (role: {{ user.role }})</span>
+        {% else %}
+        <span class="badge text-bg-secondary">Sign in to run firewall checks</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-1">
+  <div class="col-12 col-xl-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <div>
+            <h2 class="h5 mb-1">Custom regression</h2>
+            <p class="text-muted2 mb-0">Supply your own allow/deny matrix to validate policy drift.</p>
+          </div>
+          <span class="badge text-bg-light" id="customStatus">Idle</span>
+        </div>
+
+        <form class="row gy-3" id="firewallForm" data-no-overlay>
+          <div class="col-12">
+            <label class="form-label" for="firewallTarget">Target (host or CIDR)</label>
+            <input class="form-control" id="firewallTarget" type="text" placeholder="10.0.0.0/24" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="firewallExpectations">Expectations (JSON array)</label>
+            <textarea class="form-control" id="firewallExpectations" rows="5" placeholder='[{"service": "ssh", "port": 22, "protocol": "tcp", "expect": "allow"}]'></textarea>
+            <div class="form-text">Include a list of entries with <code>port</code> and <code>expect</code> (allow/deny). Other fields are ignored.</div>
+          </div>
+          <div class="col-12 text-end">
+            <button type="submit" class="btn btn-primary">Run custom test</button>
+          </div>
+        </form>
+
+        <div class="mt-4">
+          <h3 class="h6">Custom results</h3>
+          <pre class="small bg-body-tertiary p-3 rounded" id="firewallResults">Waiting for a run…</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-body d-flex flex-column h-100">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <div>
+            <h2 class="h5 mb-1">Guided pentest</h2>
+            <p class="text-muted2 mb-0">Run a curated set of firewall checks and get a hardening report.</p>
+          </div>
+          <span class="badge text-bg-light" id="pentestStatus">Idle</span>
+        </div>
+
+        <div class="d-flex flex-column gap-3">
+          <p class="small text-muted2 mb-0">Common remote access and database ports are probed and graded. A quick report summarizes exposures and suggested changes.</p>
+          <button class="btn btn-outline-primary align-self-start" id="pentestBtn">Run pentest</button>
+        </div>
+
+        <div class="mt-4">
+          <h3 class="h6">Pentest report</h3>
+          <pre class="small bg-body-tertiary p-3 rounded" id="pentestResults">No pentest run yet.</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function setStatus(el, text, success = false) {
+    el.textContent = text;
+    el.className = `badge text-bg-${success ? 'success' : 'light'}`;
+  }
+
+  function safeJsonParse(value) {
+    if (!value) return null;
+    try { return JSON.parse(value); }
+    catch (e) { return null; }
+  }
+
+  async function postJson(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || res.statusText || 'Request failed');
+    }
+    return data;
+  }
+
+  const customStatus = document.getElementById('customStatus');
+  const firewallResults = document.getElementById('firewallResults');
+  const pentestStatus = document.getElementById('pentestStatus');
+  const pentestResults = document.getElementById('pentestResults');
+
+  document.getElementById('firewallForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setStatus(customStatus, 'Running…');
+    firewallResults.textContent = 'Running firewall regression…';
+    const target = document.getElementById('firewallTarget').value;
+    const expectations = safeJsonParse(document.getElementById('firewallExpectations').value) || [];
+    try {
+      const data = await postJson('/api/firewall/run', { target, expectations });
+      firewallResults.textContent = JSON.stringify(data, null, 2);
+      setStatus(customStatus, 'Completed', true);
+    } catch (err) {
+      firewallResults.textContent = err.message || 'Run failed';
+      setStatus(customStatus, 'Failed');
+    }
+  });
+
+  document.getElementById('pentestBtn').addEventListener('click', async () => {
+    const target = document.getElementById('firewallTarget').value;
+    if (!target) {
+      pentestResults.textContent = 'Set a target first.';
+      return;
+    }
+    setStatus(pentestStatus, 'Running…');
+    pentestResults.textContent = 'Running guided pentest…';
+    try {
+      const data = await postJson('/api/firewall/pentest', { target });
+      pentestResults.textContent = JSON.stringify(data.report, null, 2);
+      setStatus(pentestStatus, 'Completed', true);
+    } catch (err) {
+      pentestResults.textContent = err.message || 'Pentest failed';
+      setStatus(pentestStatus, 'Failed');
+    }
+  });
+</script>
+{% endblock %}

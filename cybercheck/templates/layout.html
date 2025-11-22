@@ -105,11 +105,11 @@
                 <small class="d-block text-muted">Sniffing, MITM & filters</small>
               </span>
             </a>
-            <a class="nav-link {{ 'active' if (active_page|default('')) == 'security_ops' else '' }}" href="{{ url_for('security_ops') }}">
-              <span class="sidebar-icon" aria-hidden="true">🧭</span>
+            <a class="nav-link {{ 'active' if (active_page|default('')) == 'firewall' else '' }}" href="{{ url_for('firewall') }}">
+              <span class="sidebar-icon" aria-hidden="true">🧱</span>
               <span>
-                <strong>Security ops</strong>
-                <small class="d-block text-muted">Auth, alerts & regressions</small>
+                <strong>Firewall</strong>
+                <small class="d-block text-muted">Custom tests & guided pentests</small>
               </span>
             </a>
           </nav>

@@ -43,7 +43,11 @@ from cybercheck.utils.reporting import build_control_report
 from cybercheck.utils.monitor import network_monitor
 from cybercheck.utils.alerts import alert_pipeline
 from cybercheck.utils.scheduler import scan_scheduler
-from cybercheck.utils.firewall_regression import collect_expectations, run_firewall_matrix
+from cybercheck.utils.firewall_regression import (
+    collect_expectations,
+    run_firewall_matrix,
+    run_firewall_pentest,
+)
 from cybercheck.utils.detection_validation import register_validation, replay_pcap, record_result
 from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
 from cybercheck.utils.background_sniffer import background_sniffer
@@ -655,10 +659,11 @@ def scan_help():
     )
 
 
+@app.route("/firewall")
 @app.route("/security-ops")
-def security_ops():
+def firewall():
     user = current_user()
-    return render_template("security_ops.html", user=user, active_page="security_ops")
+    return render_template("firewall.html", user=user, active_page="firewall")
 
 
 @app.route("/payload-inspector", methods=["GET", "POST"])
@@ -1742,11 +1747,26 @@ def api_reload_schedules():
 @app.route("/api/firewall/run", methods=["POST"])
 @require_role("analyst")
 def api_firewall_run():
+    user = current_user()
     payload = request.get_json(force=True, silent=True) or {}
     target = payload.get("target")
+    if not target:
+        return {"error": "target is required"}, 400
     expectations = payload.get("expectations", [])
-    results = run_firewall_matrix(target, expectations)
+    results = run_firewall_matrix(user["username"], target, expectations)
     return {"target": target, "results": results}
+
+
+@app.route("/api/firewall/pentest", methods=["POST"])
+@require_role("analyst")
+def api_firewall_pentest():
+    user = current_user()
+    payload = request.get_json(force=True, silent=True) or {}
+    target = payload.get("target")
+    if not target:
+        return {"error": "target is required"}, 400
+    report = run_firewall_pentest(user["username"], target)
+    return {"target": target, "report": report}
 
 
 @app.route("/api/detections/register", methods=["POST"])

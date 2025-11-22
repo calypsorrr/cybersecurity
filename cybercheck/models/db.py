@@ -43,6 +43,57 @@ def init_db() -> None:
             stderr TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            created_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT,
+            severity TEXT,
+            message TEXT,
+            status TEXT,
+            metadata TEXT,
+            created_at TEXT,
+            acknowledged_by TEXT,
+            suppressed_until TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            target TEXT,
+            args TEXT,
+            cron TEXT,
+            enabled INTEGER DEFAULT 1,
+            last_run TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS firewall_expectations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT,
+            target TEXT,
+            port TEXT,
+            protocol TEXT,
+            expected_action TEXT,
+            observed_action TEXT,
+            last_tested TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS detection_validations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            scenario TEXT,
+            expected_signal TEXT,
+            last_run TEXT,
+            last_result TEXT,
+            notes TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -256,6 +307,16 @@ def seed_reference_data(conn: sqlite3.Connection) -> None:
             ],
         )
 
+    # Ensure a default admin exists so role-based checks work out of the box
+    if cur.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
+        cur.execute(
+            """
+            INSERT INTO users (username, password_hash, role, created_at)
+            VALUES ('admin', '', 'admin', :created_at)
+            """,
+            {"created_at": datetime.now(UTC).isoformat()},
+        )
+
     conn.commit()
 
 
@@ -332,6 +393,223 @@ def fetch_asset_inventory():
     rows = cur.fetchall()
     conn.close()
     return rows
+
+
+def upsert_user(username: str, password_hash: str, role: str) -> None:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO users (username, password_hash, role, created_at)
+        VALUES (:username, :password_hash, :role, :created_at)
+        ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash, role=excluded.role
+        """,
+        {
+            "username": username,
+            "password_hash": password_hash,
+            "role": role,
+            "created_at": datetime.now(UTC).isoformat(),
+        },
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_user(username: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT username, password_hash, role, created_at FROM users WHERE username = ?", (username,))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def insert_alert(source: str, severity: str, message: str, status: str = "open", metadata: str | None = None) -> int:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO alerts (source, severity, message, status, metadata, created_at)
+        VALUES (:source, :severity, :message, :status, :metadata, :created_at)
+        """,
+        {
+            "source": source,
+            "severity": severity,
+            "message": message,
+            "status": status,
+            "metadata": metadata,
+            "created_at": datetime.now(UTC).isoformat(),
+        },
+    )
+    conn.commit()
+    alert_id = cur.lastrowid
+    conn.close()
+    return alert_id
+
+
+def update_alert(alert_id: int, status: str, acknowledged_by: str | None = None, suppressed_until: str | None = None):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE alerts
+        SET status = :status,
+            acknowledged_by = COALESCE(:ack, acknowledged_by),
+            suppressed_until = COALESCE(:suppressed_until, suppressed_until)
+        WHERE id = :alert_id
+        """,
+        {"status": status, "ack": acknowledged_by, "suppressed_until": suppressed_until, "alert_id": alert_id},
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_alerts(limit: int = 100):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,))
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def insert_schedule(name: str, tool: str, target: str, args: str, cron: str, enabled: bool = True):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO schedules (name, tool, target, args, cron, enabled, last_run)
+        VALUES (:name, :tool, :target, :args, :cron, :enabled, NULL)
+        """,
+        {
+            "name": name,
+            "tool": tool,
+            "target": target,
+            "args": args,
+            "cron": cron,
+            "enabled": int(enabled),
+        },
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_schedules(enabled_only: bool = True):
+    conn = get_conn()
+    cur = conn.cursor()
+    if enabled_only:
+        cur.execute("SELECT * FROM schedules WHERE enabled = 1")
+    else:
+        cur.execute("SELECT * FROM schedules")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def record_schedule_run(schedule_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE schedules SET last_run = :last_run WHERE id = :schedule_id",
+        {"last_run": datetime.now(UTC).isoformat(), "schedule_id": schedule_id},
+    )
+    conn.commit()
+    conn.close()
+
+
+def upsert_firewall_expectation(
+    description: str,
+    target: str,
+    port: str,
+    protocol: str,
+    expected_action: str,
+    observed_action: str | None = None,
+    last_tested: str | None = None,
+):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO firewall_expectations (description, target, port, protocol, expected_action, observed_action, last_tested)
+        VALUES (:description, :target, :port, :protocol, :expected_action, :observed_action, :last_tested)
+        """,
+        {
+            "description": description,
+            "target": target,
+            "port": port,
+            "protocol": protocol,
+            "expected_action": expected_action,
+            "observed_action": observed_action,
+            "last_tested": last_tested,
+        },
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_firewall_observation(expectation_id: int, observed_action: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE firewall_expectations
+        SET observed_action = :observed_action,
+            last_tested = :last_tested
+        WHERE id = :expectation_id
+        """,
+        {
+            "observed_action": observed_action,
+            "last_tested": datetime.now(UTC).isoformat(),
+            "expectation_id": expectation_id,
+        },
+    )
+    conn.commit()
+    conn.close()
+
+
+def fetch_firewall_expectations():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM firewall_expectations ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def upsert_detection_validation(name: str, scenario: str, expected_signal: str):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO detection_validations (name, scenario, expected_signal)
+        VALUES (:name, :scenario, :expected_signal)
+        """,
+        {"name": name, "scenario": scenario, "expected_signal": expected_signal},
+    )
+    conn.commit()
+    conn.close()
+
+
+def record_detection_run(validation_id: int, result: str, notes: str | None = None):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE detection_validations
+        SET last_run = :last_run,
+            last_result = :result,
+            notes = COALESCE(:notes, notes)
+        WHERE id = :validation_id
+        """,
+        {
+            "last_run": datetime.now(UTC).isoformat(),
+            "result": result,
+            "notes": notes,
+            "validation_id": validation_id,
+        },
+    )
+    conn.commit()
+    conn.close()
 
 
 def fetch_control_mappings():

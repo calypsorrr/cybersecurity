@@ -8,11 +8,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from tempfile import NamedTemporaryFile
 
 from cybercheck.config import SECRET_KEY, NMAP_PROFILES
-from cybercheck.utils.auth import require_active_session
+from cybercheck.utils.auth import (
+    authenticate_user,
+    bootstrap_admin,
+    current_user,
+    require_active_session,
+    require_role,
+)
 from cybercheck.scanners import nmap_scan, nikto_scan, scapy_ping_scan
 from cybercheck.scanners import run_ettercap
 from cybercheck.scanners.extended_tools import (
@@ -35,6 +41,10 @@ from cybercheck.models.db import (
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.reporting import build_control_report
 from cybercheck.utils.monitor import network_monitor
+from cybercheck.utils.alerts import alert_pipeline
+from cybercheck.utils.scheduler import scan_scheduler
+from cybercheck.utils.firewall_regression import collect_expectations, run_firewall_matrix
+from cybercheck.utils.detection_validation import register_validation, replay_pcap, record_result
 from cybercheck.utils.capture import analyze_pcap_file, extract_interesting_packets
 from cybercheck.utils.background_sniffer import background_sniffer
 from cybercheck.utils.background_spiderfoot import (
@@ -285,6 +295,44 @@ def index():
         control_report=control_report,
         active_page="home",
     )
+
+
+@app.route("/security-ops")
+def security_ops():
+    return render_template(
+        "security_ops.html",
+        active_page="security_ops",
+        user=current_user(),
+    )
+
+
+# ---- Authentication and RBAC ----
+@app.route("/auth/bootstrap", methods=["POST"])
+def auth_bootstrap():
+    data = request.get_json(force=True, silent=True) or {}
+    password = data.get("password")
+    if not password:
+        return {"error": "password required"}, 400
+    bootstrap_admin(password)
+    return {"status": "bootstrapped"}
+
+
+@app.route("/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json(force=True, silent=True) or {}
+    username = data.get("username")
+    password = data.get("password")
+    if not username or not password:
+        return {"error": "missing credentials"}, 400
+    if authenticate_user(username, password):
+        return {"status": "ok", "user": current_user()}
+    return {"error": "invalid credentials"}, 401
+
+
+@app.route("/auth/logout", methods=["POST"])
+def auth_logout():
+    session.clear()
+    return {"status": "logged out"}
 
 
 @app.route("/scan-help")
@@ -1644,6 +1692,88 @@ def api_set_network_interface():
     return jsonify({
         "interface": network_monitor.interface,
     })
+
+
+# ---- Alerts, scheduling, and regression helpers ----
+@app.route("/api/alerts", methods=["GET", "POST"])
+def api_alerts():
+    token = request.args.get("token")
+    if request.method == "POST":
+        if not require_active_session(token or ""):
+            return {"error": "forbidden"}, 403
+        payload = request.get_json(force=True, silent=True) or {}
+        alert_id = alert_pipeline.emit(
+            source=payload.get("source", "manual"),
+            severity=payload.get("severity", "info"),
+            message=payload.get("message", ""),
+            metadata=payload.get("metadata"),
+        )
+        return {"id": alert_id, "status": "queued"}
+    alerts = alert_pipeline.list_recent()
+    return jsonify([dict(a) for a in alerts])
+
+
+@app.route("/api/alerts/<int:alert_id>/ack", methods=["POST"])
+def api_alert_ack(alert_id: int):
+    user = current_user()
+    if not user:
+        return {"error": "forbidden"}, 403
+    alert_pipeline.acknowledge(alert_id, user["username"])
+    return {"status": "acknowledged"}
+
+
+@app.route("/api/alerts/<int:alert_id>/suppress", methods=["POST"])
+def api_alert_suppress(alert_id: int):
+    user = current_user()
+    if not user:
+        return {"error": "forbidden"}, 403
+    minutes = int((request.get_json(force=True, silent=True) or {}).get("minutes", 30))
+    alert_pipeline.suppress(alert_id, minutes=minutes)
+    return {"status": "suppressed"}
+
+
+@app.route("/api/schedules/reload", methods=["POST"])
+def api_reload_schedules():
+    token = request.args.get("token")
+    if not require_active_session(token or ""):
+        return {"error": "forbidden"}, 403
+    scan_scheduler.start()
+    scan_scheduler.load_jobs()
+    return {"status": "reloaded"}
+
+
+@app.route("/api/firewall/run", methods=["POST"])
+@require_role("analyst")
+def api_firewall_run():
+    payload = request.get_json(force=True, silent=True) or {}
+    target = payload.get("target")
+    expectations = payload.get("expectations", [])
+    results = run_firewall_matrix(target, expectations)
+    return {"target": target, "results": results}
+
+
+@app.route("/api/detections/register", methods=["POST"])
+@require_role("analyst")
+def api_detections_register():
+    payload = request.get_json(force=True, silent=True) or {}
+    register_validation(payload.get("name", ""), payload.get("scenario", ""), payload.get("expected_signal", ""))
+    return {"status": "registered"}
+
+
+@app.route("/api/detections/replay", methods=["POST"])
+@require_role("analyst")
+def api_detections_replay():
+    payload = request.get_json(force=True, silent=True) or {}
+    analysis = replay_pcap(payload.get("pcap_path", ""))
+    return {"analysis": analysis}
+
+
+@app.route("/api/detections/<int:validation_id>/result", methods=["POST"])
+@require_role("analyst")
+def api_detections_result(validation_id: int):
+    payload = request.get_json(force=True, silent=True) or {}
+    record_result(validation_id, payload.get("result", "unknown"), payload.get("notes"))
+    return {"status": "recorded"}
 
 
 if __name__ == "__main__":

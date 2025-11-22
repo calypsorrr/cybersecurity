@@ -402,10 +402,7 @@ def upsert_user(username: str, password_hash: str, role: str) -> None:
         """
         INSERT INTO users (username, password_hash, role, created_at)
         VALUES (:username, :password_hash, :role, :created_at)
-        ON CONFLICT(username) DO UPDATE SET
-            password_hash = excluded.password_hash,
-            role = excluded.role,
-            created_at = COALESCE(users.created_at, excluded.created_at)
+        ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash, role=excluded.role
         """,
         {
             "username": username,

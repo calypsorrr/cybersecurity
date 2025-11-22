@@ -1,5 +1,6 @@
 bandit>=1.7
 Flask>=2.3
+Werkzeug>=2.3
 pip-audit>=2.7
 python-dotenv>=1.0
 safety>=3.1

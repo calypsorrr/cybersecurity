@@ -7,7 +7,7 @@
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div>
             <h1 class="h4 mb-1">Security operations</h1>
-            <p class="text-muted mb-0">Drive the new authentication, alerting, scheduling, firewall, and detection helpers through the UI.</p>
+            <p class="text-muted2 mb-0">Drive the new authentication, alerting, scheduling, firewall, and detection helpers through the UI.</p>
           </div>
           {% if user %}
           <span class="badge text-bg-success">Signed in as {{ user.username }} (role: {{ user.role }})</span>
@@ -22,7 +22,7 @@
     <div class="card shadow-sm h-100">
       <div class="card-body">
         <h2 class="h5">Quick help</h2>
-        <ul class="mb-0 small text-muted ps-3">
+        <ul class="mb-0 small text-muted2 ps-3">
           <li>Authentication is session-based. Bootstrap once, then login to call protected APIs.</li>
           <li>Alert CRUD and scheduler reloads accept the legacy <code>token</code> query parameter as a fallback.</li>
           <li>Firewall and detection helpers require the <code>analyst</code> role.</li>
@@ -39,7 +39,7 @@
         <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h2 class="h5 mb-1">Authentication</h2>
-            <p class="text-muted mb-0">Bootstrap an admin, login, or logout via session-backed APIs.</p>
+            <p class="text-muted2 mb-0">Bootstrap an admin, login, or logout via session-backed APIs.</p>
           </div>
           <span class="badge text-bg-light" id="authStatus">Idle</span>
         </div>
@@ -80,7 +80,7 @@
         <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h2 class="h5 mb-1">Alert pipeline</h2>
-            <p class="text-muted mb-0">Emit alerts, view recent entries, and acknowledge or suppress them.</p>
+            <p class="text-muted2 mb-0">Emit alerts, view recent entries, and acknowledge or suppress them.</p>
           </div>
           <span class="badge text-bg-light" id="alertStatus">Idle</span>
         </div>
@@ -120,10 +120,10 @@
         <div class="mt-4">
           <div class="d-flex align-items-center justify-content-between mb-2">
             <h3 class="h6 mb-0">Recent alerts</h3>
-            <small class="text-muted" id="alertCountLabel">0</small>
+            <small class="text-muted2" id="alertCountLabel">0</small>
           </div>
           <div class="list-group" id="alertFeed">
-            <div class="list-group-item text-muted small">No alerts yet.</div>
+            <div class="list-group-item text-muted2 small">No alerts yet.</div>
           </div>
         </div>
       </div>
@@ -138,7 +138,7 @@
         <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h2 class="h5 mb-1">Scheduler</h2>
-            <p class="text-muted mb-0">Reload recurring scans and policy checks through APScheduler.</p>
+            <p class="text-muted2 mb-0">Reload recurring scans and policy checks through APScheduler.</p>
           </div>
           <span class="badge text-bg-light" id="scheduleStatus">Idle</span>
         </div>
@@ -161,7 +161,7 @@
         <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h2 class="h5 mb-1">Firewall regression</h2>
-            <p class="text-muted mb-0">Run expected-allowed/blocked matrices against a target with Nmap/Scapy helpers.</p>
+            <p class="text-muted2 mb-0">Run expected-allowed/blocked matrices against a target with Nmap/Scapy helpers.</p>
           </div>
           <span class="badge text-bg-light" id="firewallStatus">Idle</span>
         </div>
@@ -195,7 +195,7 @@
         <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <div>
             <h2 class="h5 mb-1">Detection validation</h2>
-            <p class="text-muted mb-0">Register validation scenarios, replay PCAPs, and store pass/fail outcomes.</p>
+            <p class="text-muted2 mb-0">Register validation scenarios, replay PCAPs, and store pass/fail outcomes.</p>
           </div>
           <span class="badge text-bg-light" id="detectionStatus">Idle</span>
         </div>
@@ -336,7 +336,7 @@
     const alerts = await res.json().catch(() => []);
     alertFeed.innerHTML = '';
     if (!alerts.length) {
-      alertFeed.innerHTML = '<div class="list-group-item text-muted small">No alerts yet.</div>';
+      alertFeed.innerHTML = '<div class="list-group-item text-muted2 small">No alerts yet.</div>';
       alertCountLabel.textContent = '0 alerts';
     } else {
       alertCountLabel.textContent = `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`;
@@ -347,8 +347,8 @@
           <div class="d-flex justify-content-between align-items-start">
             <div>
               <div class="fw-semibold">${a.source || 'unknown'} <span class="badge text-bg-secondary ms-2">${a.severity}</span></div>
-              <div class="small text-muted">${a.message || ''}</div>
-              <div class="small text-muted">${a.created_at || ''} · status: ${a.status || 'new'}</div>
+              <div class="small text-muted2">${a.message || ''}</div>
+              <div class="small text-muted2">${a.created_at || ''} · status: ${a.status || 'new'}</div>
             </div>
             <div class="btn-group btn-group-sm" role="group">
               <button class="btn btn-outline-secondary" data-action="ack" data-id="${a.id}">Ack</button>

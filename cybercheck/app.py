@@ -655,6 +655,12 @@ def scan_help():
     )
 
 
+@app.route("/security-ops")
+def security_ops():
+    user = current_user()
+    return render_template("security_ops.html", user=user, active_page="security_ops")
+
+
 @app.route("/payload-inspector", methods=["GET", "POST"])
 def payload_inspector():
     results = []

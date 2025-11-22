@@ -27,6 +27,15 @@ CyberCheck is a Flask-based security operations dashboard that orchestrates reco
    ```
    Navigate to `http://127.0.0.1:5000` to access the dashboard.
 
+### Where the recent backend changes live
+
+- **Session authentication and roles**: JSON endpoints for bootstrapping an admin, logging in, and logging out are under `/auth/*` in `app.py`. They use helpers in `utils/auth.py` and the `users` table in `models/db.py` to bind actions to verified identities while still supporting the legacy `ENGAGEMENT_TOKEN` for sensitive routes.
+- **Alerting and suppression**: REST APIs at `/api/alerts` and `/api/alerts/<id>/ack|suppress` surface the alert pipeline defined in `utils/alerts.py` so alerts can be emitted, acknowledged, or temporarily muted.
+- **Scheduling**: `/api/schedules/reload` reloads cron-based recurring scan jobs using the `scan_scheduler` helper in `utils/scheduler.py`, with APScheduler used when available and a safe no-op fallback otherwise.
+- **Firewall regression & detection validation**: Analyst-only APIs at `/api/firewall/run` and `/api/detections/*` call helpers in `utils/firewall_regression.py` and `utils/detection_validation.py` to exercise allow/deny matrices, replay PCAPs, and record expected detection outcomes.
+
+These additions extend the backend and API surface; the HTML templates have not yet been updated with new navigation or forms, so you will interact with them via HTTP requests or your own frontend wiring.
+
 ## Code flow (high level)
 
 - **HTTP layer**: `app.py` defines Flask routes that validate user input, call scanning helpers, and render Jinja templates.

@@ -37,6 +37,7 @@ from cybercheck.models.db import (
     fetch_control_mappings,
     fetch_findings,
     fetch_last_runs,
+    get_conn,
 )
 from cybercheck.utils.parsers import parse_bandit_json  # Bandit -> readable report
 from cybercheck.utils.reporting import build_control_report
@@ -58,6 +59,14 @@ from cybercheck.utils.background_spiderfoot import (
 )
 from cybercheck.utils.inspector import analyze_email_text, analyze_uploaded_file
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
+from cybercheck.utils.logging import get_logger
+from cybercheck.utils.security import (
+    clamp_text,
+    validate_interface_name,
+    validate_scan_target,
+    validate_string_length,
+)
+from werkzeug.exceptions import HTTPException
 
 try:
     from datetime import UTC
@@ -67,6 +76,8 @@ except ImportError:  # pragma: no cover - Python <3.11 fallback
     UTC = _tz.utc
 
 BASE_DIR = Path(__file__).resolve().parent
+
+logger = get_logger(__name__)
 
 WIRESHARK_CACHE_LIMIT = 6
 WIRESHARK_RUN_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
@@ -264,6 +275,13 @@ def _format_timestamp(dt: datetime | None) -> str:
         return dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
     except Exception:  # pragma: no cover - safety guard
         return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _prefers_json() -> bool:
+    return request.path.startswith("/api") or (
+        request.accept_mimetypes["application/json"]
+        >= request.accept_mimetypes.get("text/html", 0)
+    )
 
 
 @app.route("/")
@@ -678,7 +696,12 @@ def payload_inspector():
             results.append(analyze_uploaded_file(uploaded.filename, uploaded.read()))
 
         if email_raw:
-            results.append(analyze_email_text(email_raw))
+            safe_email = clamp_text(email_raw, max_length=8000)
+            ok, error = validate_string_length(safe_email, 8000, "Email content")
+            if not ok:
+                flash(error or "Email content invalid.", "danger")
+                return redirect(url_for("payload_inspector"))
+            results.append(analyze_email_text(safe_email))
 
         if not results:
             flash("Upload a file or paste an email to inspect.", "warning")
@@ -1198,8 +1221,9 @@ def run_appsec_suite():
     user = (request.form.get("user") or "operator").strip() or "operator"
     token = request.form.get("engagement_token")
 
-    if not target:
-        flash("Target is required.", "danger")
+    valid_target, target_error = validate_scan_target(target)
+    if not valid_target:
+        flash(target_error or "Target is required.", "danger")
         return redirect(url_for("index"))
 
     active_required = tool in {"zap-baseline", "zap-api", "zap-full", "trivy", "grype", "checkov"}
@@ -1269,8 +1293,9 @@ def run_standard_suite():
     capture_traffic = _coerce_bool(request.form.get("capture_traffic"), default=True)
     interface = (request.form.get("capture_interface") or "").strip()
 
-    if not target:
-        flash("Target required for the standard sweep.", "danger")
+    valid_target, target_error = validate_scan_target(target)
+    if not valid_target:
+        flash(target_error or "Target required for the standard sweep.", "danger")
         return redirect(url_for("index"))
 
     started = datetime.now(UTC)
@@ -1289,20 +1314,24 @@ def run_standard_suite():
         if not interface:
             flash("Interface required to capture packets. Capture skipped.", "warning")
         else:
-            try:
-                pcap_file = resolve_pcap_output_path(user, f"standard-suite-{slug}.pcap")
-                sniff_resp = background_sniffer.start(
-                    user=user,
-                    interface=interface,
-                    quiet=True,
-                    text_mode=True,
-                    pcap_file=pcap_file,
-                )
-                sniff_started = sniff_resp.get("running", False)
-                sniff_summary = sniff_resp.get("summary")
-            except Exception as exc:  # pragma: no cover - runtime safeguard
-                sniff_error = str(exc)
-                flash(f"Packet capture could not start: {exc}", "warning")
+            ok, error = validate_interface_name(interface)
+            if not ok:
+                flash(error or "Invalid interface provided.", "danger")
+            else:
+                try:
+                    pcap_file = resolve_pcap_output_path(user, f"standard-suite-{slug}.pcap")
+                    sniff_resp = background_sniffer.start(
+                        user=user,
+                        interface=interface,
+                        quiet=True,
+                        text_mode=True,
+                        pcap_file=pcap_file,
+                    )
+                    sniff_started = sniff_resp.get("running", False)
+                    sniff_summary = sniff_resp.get("summary")
+                except Exception as exc:  # pragma: no cover - runtime safeguard
+                    sniff_error = str(exc)
+                    flash(f"Packet capture could not start: {exc}", "warning")
 
     def _append_step(name: str, run: dict[str, Any]) -> None:
         preview = (run.get("stdout") or "").splitlines()
@@ -1405,8 +1434,9 @@ def run_active():
         profile = (request.form.get("nmap_profile") or "").strip() or None
         extra_args_raw = (request.form.get("extra_args") or "").strip()
 
-    if not target:
-        flash("Target required for active scans.", "danger")
+    valid_target, target_error = validate_scan_target(target)
+    if not valid_target:
+        flash(target_error or "Target required for active scans.", "danger")
         return redirect(url_for("index"))
 
     # Split extra args (space-separated). Keep None if empty.
@@ -1652,6 +1682,58 @@ def api_network_topology():
     }
     return jsonify(topology)
 
+
+def _build_health_report() -> tuple[dict, int]:
+    components: dict[str, dict] = {}
+    db_ok = False
+
+    try:
+        conn = get_conn()
+        conn.execute("SELECT 1")
+        conn.close()
+        components["database"] = {"status": "ok"}
+        db_ok = True
+    except Exception as exc:  # pragma: no cover - runtime safeguard
+        logger.error("Database health check failed: %s", exc)
+        components["database"] = {"status": "error", "detail": str(exc)}
+
+    try:
+        network_monitor.ensure_running()
+        snapshot = network_monitor.snapshot()
+        monitor_error = getattr(network_monitor, "_error", None)
+        components["network_monitor"] = {
+            "status": "ok" if not monitor_error else "degraded",
+            "error": monitor_error,
+            "uptime": snapshot.get("uptime"),
+            "window": snapshot.get("window", {}).get("seconds"),
+        }
+    except Exception as exc:  # pragma: no cover - runtime safeguard
+        logger.error("Network monitor health check failed: %s", exc)
+        components["network_monitor"] = {"status": "error", "error": str(exc)}
+
+    components["version"] = {
+        "status": "ok",
+        "value": os.environ.get("CYBERCHECK_VERSION", "dev"),
+    }
+
+    monitor_status = components.get("network_monitor", {}).get("status")
+    overall = "ok" if db_ok and monitor_status == "ok" else "degraded"
+    status_code = 200 if overall == "ok" else 503
+    return {"status": overall, "components": components}, status_code
+
+
+@app.route("/health")
+@app.route("/api/health")
+def health_check():
+    payload, status_code = _build_health_report()
+    if _prefers_json() or request.path.startswith("/api"):
+        return jsonify(payload), status_code
+
+    summary = [f"status={payload.get('status')}"]
+    for name, comp in payload.get("components", {}).items():
+        summary.append(f"{name}:{comp.get('status')}")
+    return " | ".join(summary), status_code, {"Content-Type": "text/plain"}
+
 @app.route("/api/network_interfaces")
 def api_network_interfaces():
     """
@@ -1687,6 +1769,11 @@ def api_set_network_interface():
     """
     payload = request.get_json(silent=True) or {}
     iface = (payload.get("interface") or "").strip() or None
+
+    if iface:
+        ok, error = validate_interface_name(iface)
+        if not ok:
+            return {"error": error or "invalid interface"}, 400
 
     # iface = None => default Scapy interface
     network_monitor.set_interface(iface)
@@ -1765,6 +1852,9 @@ def api_firewall_pentest():
     target = payload.get("target")
     if not target:
         return {"error": "target is required"}, 400
+    ok, error = validate_scan_target(str(target))
+    if not ok:
+        return {"error": error or "invalid target"}, 400
     report = run_firewall_pentest(user["username"], target)
     return {"target": target, "report": report}
 
@@ -1791,6 +1881,25 @@ def api_detections_result(validation_id: int):
     payload = request.get_json(force=True, silent=True) or {}
     record_result(validation_id, payload.get("result", "unknown"), payload.get("notes"))
     return {"status": "recorded"}
+
+
+@app.errorhandler(404)
+def handle_not_found(error):  # pragma: no cover - runtime handler
+    logger.warning("404 for %s from %s", request.path, request.remote_addr)
+    if _prefers_json():
+        return {"error": "not found", "path": request.path}, 404
+    return "Not found", 404
+
+
+@app.errorhandler(Exception)
+def handle_exception(error):  # pragma: no cover - runtime handler
+    if isinstance(error, HTTPException):
+        return error
+
+    logger.exception("Unhandled exception: %s", error)
+    if _prefers_json():
+        return {"error": "internal server error"}, 500
+    return "An unexpected error occurred.", 500
 
 
 if __name__ == "__main__":

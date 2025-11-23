@@ -4,6 +4,13 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+try:  # pragma: no cover - Python <3.11 fallback
+    from datetime import UTC
+except ImportError:  # pragma: no cover - fallback
+    from datetime import timezone as _tz
+
+    UTC = _tz.utc
+
 from cybercheck.config import BASE_DIR
 
 _DEFAULT_PCAP_DIR = Path(BASE_DIR) / "logs" / "ettercap_pcaps"
@@ -55,7 +62,7 @@ def resolve_pcap_output_path(user: str, requested_path: str | None = None) -> st
             path = _DEFAULT_PCAP_DIR / path
         sanitized = _ensure_within_default_dir(path)
     else:
-        timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         generated = _DEFAULT_PCAP_DIR / f"ettercap-{timestamp}-{_slugify(user)}.pcap"
         sanitized = _ensure_within_default_dir(generated)
 

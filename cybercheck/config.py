@@ -1,10 +1,37 @@
 import os
+import secrets
+import warnings
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _generate_dev_secret() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _require_secret() -> str:
+    """Return a secure secret key with guardrails for production."""
+
+    env_secret = os.environ.get("SECRET_KEY")
+    env = os.environ.get("FLASK_ENV", "development").lower()
+
+    if env_secret:
+        if env_secret == "dev-secret":
+            warnings.warn("Using weak default SECRET_KEY; set a strong value in production.")
+        return env_secret
+
+    if env == "production":
+        raise RuntimeError("SECRET_KEY environment variable is required in production")
+
+    generated = _generate_dev_secret()
+    warnings.warn("SECRET_KEY not set; generated a temporary development key.")
+    return generated
+
+
 ENGAGEMENT_TOKEN: str | None = os.environ.get("ENGAGEMENT_TOKEN")
-SECRET_KEY: str = os.environ.get("SECRET_KEY", "dev-secret")
+SECRET_KEY: str = _require_secret()
 DATABASE: str = os.environ.get("DATABASE", "logs/cybercheck.db")
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 

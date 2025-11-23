@@ -33,7 +33,15 @@
         <form class="row gy-3" id="firewallForm" data-no-overlay>
           <div class="col-12">
             <label class="form-label" for="firewallTarget">Target (host or CIDR)</label>
-            <input class="form-control" id="firewallTarget" type="text" placeholder="10.0.0.0/24" required>
+            <input class="form-control" id="firewallTarget" type="text" placeholder="10.0.0.0/24" list="gatewayPresets" value="192.168.1.1" required>
+            <datalist id="gatewayPresets">
+              <option value="192.168.1.1"></option>
+              <option value="192.168.0.1"></option>
+              <option value="10.0.0.1"></option>
+              <option value="192.168.1.254"></option>
+              <option value="192.168.100.1"></option>
+            </datalist>
+            <div class="form-text">Prefilled with common gateway IPs—pick one or replace with your own target.</div>
           </div>
           <div class="col-12">
             <label class="form-label" for="firewallExpectations">Expectations (JSON array)</label>

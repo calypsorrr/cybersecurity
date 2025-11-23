@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
+
+try:  # pragma: no cover - Python <3.11 fallback
+    from datetime import UTC
+except ImportError:  # pragma: no cover - fallback
+    from datetime import timezone as _tz
+
+    UTC = _tz.utc
 from typing import Dict, Iterable, Optional
 
 from cybercheck.models.db import fetch_alerts, insert_alert, update_alert
@@ -21,7 +28,7 @@ class AlertPipeline:
         update_alert(alert_id, status="acknowledged", acknowledged_by=user)
 
     def suppress(self, alert_id: int, minutes: int = 30) -> None:
-        until = datetime.utcnow() + timedelta(minutes=minutes)
+        until = datetime.now(UTC) + timedelta(minutes=minutes)
         update_alert(alert_id, status="suppressed", suppressed_until=until.isoformat())
 
     def list_recent(self, limit: int = 50):

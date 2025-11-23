@@ -5,9 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 from cybercheck.config import DATABASE
+from cybercheck.utils.logging import get_logger
 
 # Ensure DB directory exists
 Path(DATABASE).parent.mkdir(parents=True, exist_ok=True)
+
+logger = get_logger(__name__)
 
 # UTC import fallback
 try:
@@ -18,9 +21,16 @@ except ImportError:
 
 
 def get_conn() -> sqlite3.Connection:
-    """Open a SQLite connection configured with Row objects."""
-    conn = sqlite3.connect(DATABASE)
+    """Open a SQLite connection configured with sensible pragmas."""
+
+    conn = sqlite3.connect(DATABASE, timeout=10)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
+        conn.execute("PRAGMA busy_timeout = 10000;")
+    except sqlite3.Error as exc:  # pragma: no cover - defensive logging
+        print(f"[DB] pragma setup failed: {exc}")
     return conn
 
 
@@ -138,6 +148,19 @@ def init_db() -> None:
             FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE SET NULL,
             FOREIGN KEY(control_id) REFERENCES controls(id) ON DELETE SET NULL
         );
+
+        CREATE INDEX IF NOT EXISTS idx_runs_tool_started ON runs(tool, started_at);
+        CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user);
+        CREATE INDEX IF NOT EXISTS idx_runs_target ON runs(target);
+
+        CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+        CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at);
+        CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
+
+        CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
+        CREATE INDEX IF NOT EXISTS idx_findings_asset ON findings(asset_id);
+        CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
+        CREATE INDEX IF NOT EXISTS idx_findings_opened ON findings(opened_at);
         """
     )
     conn.commit()
@@ -347,7 +370,7 @@ def log_run(
         conn.commit()
     except Exception as e:
         # do not crash the app if logging fails
-        print(f"[DB] Logging error: {e}")
+        logger.error("[DB] Logging error: %s", e)
     finally:
         if conn:
             conn.close()

@@ -19,6 +19,20 @@ from cybercheck.config import DEFAULT_TIMEOUT, ALLOWED_TOOLS
 from cybercheck.models.db import log_run
 
 
+MAX_OUTPUT_CHUNK = 50 * 1024
+
+
+def _truncate_output(stream: str) -> str:
+    if len(stream) <= MAX_OUTPUT_CHUNK * 2:
+        return stream
+
+    head = stream[:MAX_OUTPUT_CHUNK]
+    tail = stream[-MAX_OUTPUT_CHUNK:]
+    omitted = len(stream) - (len(head) + len(tail))
+    marker = f"\n...[truncated {omitted} bytes]...\n"
+    return f"{head}{marker}{tail}"
+
+
 def run_tool(user: str, tool: str, target: str, args: List[str], timeout: Optional[int] = None) -> Dict[str, Any]:
     """Execute a whitelisted CLI tool and persist the run details.
 
@@ -53,13 +67,13 @@ def run_tool(user: str, tool: str, target: str, args: List[str], timeout: Option
             started_at=started,
             finished_at=finished,
             returncode=proc.returncode,
-            stdout=proc.stdout[:100000],
-            stderr=proc.stderr[:100000],
+            stdout=_truncate_output(proc.stdout),
+            stderr=_truncate_output(proc.stderr),
         )
         return {
             "returncode": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
+            "stdout": _truncate_output(proc.stdout),
+            "stderr": _truncate_output(proc.stderr),
             "started_at": started,
             "finished_at": finished,
         }

@@ -71,6 +71,22 @@ def test_email_analysis_flags_priority_invoice_attachment():
     assert "Attachment present" in issue_types
 
 
+def test_email_analysis_surfaces_spf_and_return_path_issues():
+    raw_email = (
+        "Return-Path: <bounce@mailer.fake>\n"
+        "From: Trusted Sender <info@example.com>\n"
+        "Reply-To: handler@reply.example.com\n"
+        "Authentication-Results: spf=softfail (sender SPF record not authorized)\n\n"
+        "Hello"
+    )
+
+    result = analyze_email_text(raw_email)
+
+    issue_types = {issue["type"] for issue in result["issues"]}
+    assert "Return-Path mismatch" in issue_types
+    assert "SPF validation failure" in issue_types
+
+
 def test_uploaded_file_detects_truncated_image_body():
     payload = b"\xff\xd8\xff" + b"\x00" * 20  # JPEG header without end marker
 

@@ -274,6 +274,7 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
 
     from_display, from_addr = parseaddr(message.get("From", ""))
     _, reply_to = parseaddr(message.get("Reply-To", ""))
+    _, return_path = parseaddr(message.get("Return-Path", ""))
     subject = message.get("Subject", "").strip()
 
     from_domain = from_addr.split("@")[-1].lower() if "@" in from_addr else ""
@@ -300,6 +301,32 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
                 "header",
                 f"From domain: {from_domain or 'unknown'} | Reply-To domain: {reply_domain}",
             )
+    if return_path and from_addr and not _compare_domains(from_addr, return_path):
+        _append_issue(
+            issues,
+            "Return-Path mismatch",
+            "Return-Path domain differs from From domain; sender may be spoofed.",
+            "header",
+            f"From: {from_addr} | Return-Path: {return_path}",
+        )
+
+    auth_results = message.get_all("Authentication-Results", []) or []
+    spf_received = message.get_all("Received-SPF", []) or []
+    spf_lines = auth_results + spf_received
+    for spf_line in spf_lines:
+        match = re.search(r"spf=([a-z]+)", spf_line, flags=re.IGNORECASE)
+        if match:
+            spf_result = match.group(1).lower()
+            if spf_result in {"fail", "softfail", "permerror"}:
+                _append_issue(
+                    issues,
+                    "SPF validation failure",
+                    f"SPF check returned '{spf_result}', indicating sender domain is not authorized.",
+                    "header",
+                    spf_line.strip(),
+                )
+            break
+
     if not subject:
         _append_issue(issues, "Empty subject", "Messages without a subject are suspicious.", "header")
 

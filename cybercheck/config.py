@@ -4,7 +4,8 @@ import warnings
 
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 
 def _generate_dev_secret() -> str:
@@ -33,7 +34,6 @@ def _require_secret() -> str:
 ENGAGEMENT_TOKEN: str | None = os.environ.get("ENGAGEMENT_TOKEN")
 SECRET_KEY: str = _require_secret()
 DATABASE: str = os.environ.get("DATABASE", "logs/cybercheck.db")
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 VIRUSTOTAL_API_KEY = os.environ.get("VIRUSTOTAL_API_KEY")
 
 # CLI tools allowed

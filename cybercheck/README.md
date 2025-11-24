@@ -14,6 +14,7 @@ CyberCheck is a Flask-based security operations dashboard that orchestrates reco
    - `DATABASE`: Path to the SQLite database (defaults to `logs/cybercheck.db`).
    - `HOST`/`PORT`: Server bind address and port (defaults to `127.0.0.1:5000`).
    - `ENGAGEMENT_TOKEN`: Optional token used to protect sensitive routes.
+   - `VIRUSTOTAL_API_KEY`: Optional key to enable hash reputation checks via VirusTotal.
 3. **Initialize the database**
    ```bash
    python - <<'PY'
@@ -26,6 +27,17 @@ CyberCheck is a Flask-based security operations dashboard that orchestrates reco
    FLASK_DEBUG=1 python app.py
    ```
    Navigate to `http://127.0.0.1:5000` to access the dashboard.
+
+### .env support
+
+The application automatically loads environment variables from a `.env` file placed in the project root. To enable VirusTotal
+hash reputation lookups, create a `.env` file alongside `config.py` with:
+
+```bash
+VIRUSTOTAL_API_KEY=your_api_key_here
+```
+
+Restart the application after updating the `.env` file so the new settings are picked up.
 
 ### Where the recent backend changes live
 

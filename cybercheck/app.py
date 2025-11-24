@@ -10,15 +10,6 @@ from typing import Any, Dict, Optional
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from tempfile import NamedTemporaryFile
-from functools import wraps
-
-# Optional rate limiting - graceful fallback if not installed
-try:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
-    LIMITER_AVAILABLE = True
-except ImportError:
-    LIMITER_AVAILABLE = False
 
 from cybercheck.config import SECRET_KEY, NMAP_PROFILES
 from cybercheck.utils.auth import (
@@ -87,10 +78,6 @@ except ImportError:  # pragma: no cover - Python <3.11 fallback
 BASE_DIR = Path(__file__).resolve().parent
 
 logger = get_logger(__name__)
-
-# Log rate limiter status
-if not LIMITER_AVAILABLE:
-    logger.warning("Flask-Limiter not installed. Rate limiting disabled. Install with: pip install Flask-Limiter")
 
 WIRESHARK_CACHE_LIMIT = 6
 WIRESHARK_RUN_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
@@ -208,41 +195,6 @@ app = Flask(
     static_folder=str(BASE_DIR / "static"),
 )
 app.secret_key = SECRET_KEY
-
-# Rate limiting (optional)
-if LIMITER_AVAILABLE:
-    limiter = Limiter(
-        app=app,
-        key_func=get_remote_address,
-        default_limits=["1000 per hour", "200 per minute"],
-        storage_uri="memory://",
-    )
-    
-    def rate_limit(limit_str):
-        """Decorator wrapper for rate limiting."""
-        def decorator(func):
-            return limiter.limit(limit_str)(func)
-        return decorator
-else:
-    # No-op decorator if limiter not available
-    def rate_limit(limit_str):
-        def decorator(func):
-            return func
-        return decorator
-
-# Enhanced security headers
-@app.after_request
-def set_security_headers(response):
-    """Add security headers to all responses."""
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
-    # Only add HSTS if using HTTPS
-    if request.is_secure:
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    return response
 
 
 def _remember_wireshark_analysis(analysis: Dict[str, Any]) -> str:
@@ -1342,7 +1294,6 @@ def run_appsec_suite():
 
 
 @app.route("/run_standard_suite", methods=["POST"])
-@rate_limit("5 per minute")
 def run_standard_suite():
     """Run the default active trio and persist artifacts for quick baselining."""
 
@@ -1482,7 +1433,6 @@ def run_standard_suite():
 
 
 @app.route("/run_active", methods=["POST"])
-@rate_limit("10 per minute")
 def run_active():
     token = request.form.get("engagement_token")
     if not require_active_session(token or ""):

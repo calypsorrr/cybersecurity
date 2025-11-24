@@ -57,7 +57,7 @@ from cybercheck.utils.background_spiderfoot import (
     SPIDERFOOT_EVENT_GRAPH,
     background_spiderfoot,
 )
-from cybercheck.utils.inspector import analyze_email_text, analyze_uploaded_file
+from cybercheck.utils.inspector import analyze_email_text, analyze_uploaded_file, lookup_hash_reputation
 from cybercheck.utils.pcap_paths import resolve_pcap_output_path
 from cybercheck.utils.logging import get_logger
 from cybercheck.utils.security import (
@@ -687,25 +687,38 @@ def firewall():
 @app.route("/payload-inspector", methods=["GET", "POST"])
 def payload_inspector():
     results = []
+    active_tab = request.args.get("tab") or request.form.get("tab") or "payload"
 
     if request.method == "POST":
-        uploaded = request.files.get("payload_file")
-        email_raw = (request.form.get("email_raw") or "").strip()
+        action = request.form.get("action") or active_tab
 
-        if uploaded and uploaded.filename:
-            results.append(analyze_uploaded_file(uploaded.filename, uploaded.read()))
+        if action == "hash":
+            hash_value = (request.form.get("hash_value") or "").strip()
+            if not hash_value:
+                flash("Enter a hash to look up.", "warning")
+                return redirect(url_for("payload_inspector", tab="hash"))
+            results.append(lookup_hash_reputation(hash_value))
+            active_tab = "hash"
+        else:
+            uploaded = request.files.get("payload_file")
+            email_raw = (request.form.get("email_raw") or "").strip()
 
-        if email_raw:
-            safe_email = clamp_text(email_raw, max_length=8000)
-            ok, error = validate_string_length(safe_email, 8000, "Email content")
-            if not ok:
-                flash(error or "Email content invalid.", "danger")
+            if uploaded and uploaded.filename:
+                results.append(analyze_uploaded_file(uploaded.filename, uploaded.read()))
+
+            if email_raw:
+                safe_email = clamp_text(email_raw, max_length=8000)
+                ok, error = validate_string_length(safe_email, 8000, "Email content")
+                if not ok:
+                    flash(error or "Email content invalid.", "danger")
+                    return redirect(url_for("payload_inspector"))
+                results.append(analyze_email_text(safe_email))
+
+            if not results:
+                flash("Upload a file or paste an email to inspect.", "warning")
                 return redirect(url_for("payload_inspector"))
-            results.append(analyze_email_text(safe_email))
 
-        if not results:
-            flash("Upload a file or paste an email to inspect.", "warning")
-            return redirect(url_for("payload_inspector"))
+            active_tab = "payload"
 
         risk_rank = {"info": 0, "medium": 1, "high": 2}
         highest_risk = max((risk_rank.get(r.get("risk_level", "info"), 0) for r in results), default=0)
@@ -720,6 +733,7 @@ def payload_inspector():
         "inspector.html",
         active_page="inspector",
         results=results,
+        active_tab=active_tab,
     )
 
 

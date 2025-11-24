@@ -34,6 +34,7 @@ ENGAGEMENT_TOKEN: str | None = os.environ.get("ENGAGEMENT_TOKEN")
 SECRET_KEY: str = _require_secret()
 DATABASE: str = os.environ.get("DATABASE", "logs/cybercheck.db")
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+VIRUSTOTAL_API_KEY = os.environ.get("VIRUSTOTAL_API_KEY")
 
 # CLI tools allowed
 ALLOWED_TOOLS = [

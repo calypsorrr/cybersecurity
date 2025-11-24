@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import mimetypes
 import re
+import urllib.error
+import urllib.request
 from email import message_from_string
 from email.message import Message
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Dict, List, Tuple
 from urllib.parse import urlparse
+
+from cybercheck.config import VIRUSTOTAL_API_KEY
 
 
 ReadableIssue = Dict[str, str]
@@ -477,4 +482,118 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
         "metadata": metadata,
         "risk_level": risk_level,
         "summary": "No obvious phishing indicators." if not issues else "Email shows risky traits.",
+    }
+
+
+def lookup_hash_reputation(hash_value: str) -> InspectionReport:
+    normalized = hash_value.strip().lower()
+
+    if not re.fullmatch(r"[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64}", normalized):
+        return {
+            "label": "Hash reputation",
+            "risk_level": "info",
+            "summary": "Provide an MD5, SHA1, or SHA256 hash for reputation checks.",
+            "metadata": {"hash": normalized or "None"},
+            "issues": [
+                {
+                    "type": "Invalid hash",
+                    "description": "Hashes must be 32, 40, or 64 hexadecimal characters.",
+                    "location": "input",
+                }
+            ],
+        }
+
+    if not VIRUSTOTAL_API_KEY:
+        return {
+            "label": "Hash reputation",
+            "risk_level": "info",
+            "summary": "VirusTotal API key not configured; cannot query reputation.",
+            "metadata": {"hash": normalized},
+            "issues": [],
+        }
+
+    url = f"https://www.virustotal.com/api/v3/files/{normalized}"
+    request = urllib.request.Request(url, headers={"x-apikey": VIRUSTOTAL_API_KEY})
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return {
+                "label": "Hash reputation",
+                "risk_level": "info",
+                "summary": "Hash not found in VirusTotal corpus.",
+                "metadata": {"hash": normalized},
+                "issues": [],
+            }
+        return {
+            "label": "Hash reputation",
+            "risk_level": "info",
+            "summary": "VirusTotal lookup failed; try again later.",
+            "metadata": {"hash": normalized, "status": exc.code},
+            "issues": [],
+        }
+    except (urllib.error.URLError, TimeoutError) as exc:
+        return {
+            "label": "Hash reputation",
+            "risk_level": "info",
+            "summary": "Unable to reach VirusTotal.",
+            "metadata": {"hash": normalized, "error": str(exc)},
+            "issues": [],
+        }
+
+    data = payload.get("data", {})
+    attributes = data.get("attributes", {})
+    stats = attributes.get("last_analysis_stats", {})
+    last_results = attributes.get("last_analysis_results", {})
+
+    malicious = int(stats.get("malicious", 0))
+    suspicious = int(stats.get("suspicious", 0))
+    harmless = int(stats.get("harmless", 0))
+    undetected = int(stats.get("undetected", 0))
+
+    risk_level = "info"
+    if malicious > 0:
+        risk_level = "high"
+    elif suspicious > 0:
+        risk_level = "medium"
+
+    positives = [
+        res
+        for res in last_results.values()
+        if res.get("category") in {"malicious", "suspicious"}
+    ]
+    issues: List[ReadableIssue] = []
+    for result in sorted(positives, key=lambda r: r.get("engine_name", ""))[:5]:
+        issues.append(
+            {
+                "type": result.get("engine_name", "Engine"),
+                "description": result.get("result", "Flagged"),
+                "location": result.get("category", "analysis"),
+            }
+        )
+
+    summary_parts = [
+        f"Malicious: {malicious}",
+        f"Suspicious: {suspicious}",
+        f"Harmless: {harmless}",
+        f"Undetected: {undetected}",
+    ]
+    summary = ", ".join(summary_parts)
+
+    metadata: Dict[str, object] = {
+        "hash": normalized,
+        "reputation": attributes.get("reputation", 0),
+        "type": attributes.get("type_description", "Unknown"),
+        "first_submission": attributes.get("first_submission_date"),
+        "last_submission": attributes.get("last_submission_date"),
+    }
+
+    return {
+        "label": "Hash reputation",
+        "risk_level": risk_level,
+        "summary": summary,
+        "metadata": metadata,
+        "issues": issues,
     }

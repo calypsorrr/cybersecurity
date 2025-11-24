@@ -12,24 +12,53 @@
     <div class="card shadow-sm h-100">
       <div class="card-body">
         <h2 class="h5">Submit payload</h2>
-        <p class="text-muted">Supports video, audio, images, or raw RFC822 email text. Only one upload is required.</p>
-        <form method="post" enctype="multipart/form-data" class="mt-3" data-no-overlay="true">
-          <div class="mb-3">
-            <label for="payload_file" class="form-label">File upload</label>
-            <input class="form-control" type="file" id="payload_file" name="payload_file"
-                   accept="video/*,audio/*,image/*,.eml,.txt,.wav,.mp3,.mp4,.mov,.avi">
-            <div class="form-text">Media headers are validated against file type and checked for embedded scripts.</div>
+        <ul class="nav nav-tabs mt-3" role="tablist">
+          <li class="nav-item" role="presentation">
+            <a class="nav-link {% if active_tab == 'payload' %}active{% endif %}" id="payload-tab" href="{{ url_for('payload_inspector', tab='payload') }}" role="tab">File / email</a>
+          </li>
+          <li class="nav-item" role="presentation">
+            <a class="nav-link {% if active_tab == 'hash' %}active{% endif %}" id="hash-tab" href="{{ url_for('payload_inspector', tab='hash') }}" role="tab">Hash reputation</a>
+          </li>
+        </ul>
+
+        <div class="tab-content pt-3">
+          <div class="tab-pane fade {% if active_tab == 'payload' %}show active{% endif %}" id="payload-panel" role="tabpanel" aria-labelledby="payload-tab">
+            <p class="text-muted">Supports video, audio, images, or raw RFC822 email text. Only one upload is required.</p>
+            <form method="post" enctype="multipart/form-data" class="mt-3" data-no-overlay="true">
+              <input type="hidden" name="action" value="payload">
+              <input type="hidden" name="tab" value="payload">
+              <div class="mb-3">
+                <label for="payload_file" class="form-label">File upload</label>
+                <input class="form-control" type="file" id="payload_file" name="payload_file"
+                       accept="video/*,audio/*,image/*,.eml,.txt,.wav,.mp3,.mp4,.mov,.avi">
+                <div class="form-text">Media headers are validated against file type and checked for embedded scripts.</div>
+              </div>
+
+              <div class="mb-3">
+                <label for="email_raw" class="form-label">Raw email (optional)</label>
+                <textarea class="form-control" id="email_raw" name="email_raw" rows="8"
+                          placeholder="Paste full email headers and body here..."></textarea>
+                <div class="form-text">Looks for phishing language, header mismatches, links, and attachments.</div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">Inspect payload</button>
+            </form>
           </div>
 
-          <div class="mb-3">
-            <label for="email_raw" class="form-label">Raw email (optional)</label>
-            <textarea class="form-control" id="email_raw" name="email_raw" rows="8"
-                      placeholder="Paste full email headers and body here..."></textarea>
-            <div class="form-text">Looks for phishing language, header mismatches, links, and attachments.</div>
+          <div class="tab-pane fade {% if active_tab == 'hash' %}show active{% endif %}" id="hash-panel" role="tabpanel" aria-labelledby="hash-tab">
+            <p class="text-muted">Check a known sample hash against VirusTotal to see how many engines flagged it.</p>
+            <form method="post" class="mt-3" data-no-overlay="true">
+              <input type="hidden" name="action" value="hash">
+              <input type="hidden" name="tab" value="hash">
+              <div class="mb-3">
+                <label for="hash_value" class="form-label">Sample hash</label>
+                <input type="text" class="form-control" id="hash_value" name="hash_value" placeholder="Paste MD5, SHA1, or SHA256">
+                <div class="form-text">Lookup uses the configured VirusTotal API key and returns detection counts.</div>
+              </div>
+              <button type="submit" class="btn btn-primary">Check reputation</button>
+            </form>
           </div>
-
-          <button type="submit" class="btn btn-primary">Inspect payload</button>
-        </form>
+        </div>
       </div>
     </div>
   </div>

@@ -327,25 +327,6 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
                 )
             break
 
-    received_headers = message.get_all("Received", []) or []
-    fake_mailer_domains = {
-        "emkei.cz": "emkei.cz — a known spoofing relay",
-        "anonymailer": "Anonymous mailer service",
-        "smtpfake": "SMTP fake relay utility",
-    }
-    for header in received_headers:
-        lower_header = header.lower()
-        for domain, description in fake_mailer_domains.items():
-            if domain in lower_header:
-                _append_issue(
-                    issues,
-                    "Known fake mailer service",
-                    "Received header shows delivery via a spoofing-friendly mailer.",
-                    "header",
-                    f"{description}: {header.strip()}",
-                )
-                break
-
     if not subject:
         _append_issue(issues, "Empty subject", "Messages without a subject are suspicious.", "header")
 

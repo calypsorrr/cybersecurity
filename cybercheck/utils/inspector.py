@@ -334,6 +334,21 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
                 )
             break
 
+    dmarc_headers = auth_results + (message.get_all("DMARC-Filter", []) or [])
+    for dmarc_line in dmarc_headers:
+        match = re.search(r"dmarc=([a-z]+)", dmarc_line, flags=re.IGNORECASE)
+        if match:
+            dmarc_result = match.group(1).lower()
+            if dmarc_result in {"fail", "quarantine", "reject", "permerror"}:
+                _append_issue(
+                    issues,
+                    "DMARC validation failure",
+                    f"DMARC check returned '{dmarc_result}', suggesting the domain policy was not met.",
+                    "header",
+                    dmarc_line.strip(),
+                )
+            break
+
     if not subject:
         _append_issue(issues, "Empty subject", "Messages without a subject are suspicious.", "header")
 

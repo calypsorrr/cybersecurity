@@ -266,6 +266,13 @@ def _compare_domains(addr_one: str, addr_two: str) -> bool:
     return domain_one == domain_two and domain_one != ""
 
 
+# Known webmail spoofing services that frequently appear in forged headers.
+FAKE_MAILER_MARKERS = {
+    "emkei.cz": "Emkei anonymous emailer",
+    "emkei.name": "Emkei anonymous emailer",
+}
+
+
 def analyze_email_text(raw_email: str) -> InspectionReport:
     """Inspect a raw RFC822 email body and flag phishing or payload risks."""
 
@@ -329,6 +336,17 @@ def analyze_email_text(raw_email: str) -> InspectionReport:
 
     if not subject:
         _append_issue(issues, "Empty subject", "Messages without a subject are suspicious.", "header")
+
+    header_blob = "\n".join(f"{key}: {value}" for key, value in message.items()).lower()
+    for marker, label in FAKE_MAILER_MARKERS.items():
+        if marker in header_blob:
+            _append_issue(
+                issues,
+                "Fake emailer detected",
+                f"Headers reference {label}; message may be anonymously forged.",
+                "header",
+                marker,
+            )
 
     display_domains = re.findall(r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}", from_display)
     if from_display and from_domain:

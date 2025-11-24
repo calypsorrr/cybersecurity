@@ -87,6 +87,20 @@ def test_email_analysis_surfaces_spf_and_return_path_issues():
     assert "SPF validation failure" in issue_types
 
 
+def test_email_analysis_detects_fake_emailer_headers():
+    raw_email = (
+        "From: Spoofed <sender@example.com>\n"
+        "Subject: Test\n"
+        "Received: from mail.emkei.cz (mail.emkei.cz [203.0.113.10])\n\n"
+        "Body"
+    )
+
+    result = analyze_email_text(raw_email)
+
+    issue_types = {issue["type"] for issue in result["issues"]}
+    assert "Fake emailer detected" in issue_types
+
+
 def test_uploaded_file_detects_truncated_image_body():
     payload = b"\xff\xd8\xff" + b"\x00" * 20  # JPEG header without end marker
 
